@@ -12,6 +12,7 @@ from utils.climate.fire import load_fire
 from utils.climate.anomaly import load_anomaly
 from utils.climate.vegetation import load_ndmi
 from utils.climate.rainfall import load_rainfall
+from utils.climate.risk import load_integrated_risk
 
 setup_page()
 data = load_demo_data()
@@ -51,8 +52,46 @@ scope = st.selectbox("Select monitoring scope", scope_options(), index=1, format
 selected_scope = get_scope(scope)
 st.caption(f"Active scope: **{selected_scope.label}** · Area: **{selected_scope.area_ha:,.2f} ha** · {selected_scope.role}")
 
+active_data_scope = "carbon_project_zone" if scope == "SERPRO Project Landscape" else selected_scope.key
+
+rain_live = load_rainfall()
+rain_value = None
+rain_date = None
+if not rain_live.empty and active_data_scope in rain_live["scope"].astype(str).unique():
+    rr = rain_live[rain_live["scope"] == active_data_scope].sort_values("date").iloc[-1]
+    rain_value = float(rr["rainfall_mm"])
+    rain_date = pd.to_datetime(rr["date"]).date()
+
+fire_live = load_fire()
+fire_count = None
+fire_date = None
+if not fire_live.empty and active_data_scope in fire_live["scope"].astype(str).unique():
+    ff = fire_live[fire_live["scope"] == active_data_scope].copy()
+    ff["date"] = pd.to_datetime(ff["date"], errors="coerce")
+    latest_fire_date = ff["date"].max()
+    fire_count = int((ff["date"].dt.date == latest_fire_date.date()).sum())
+    fire_date = latest_fire_date.date()
+
+risk_live = load_integrated_risk()
+risk_score = None
+risk_level = None
+risk_date = None
+if not risk_live.empty and active_data_scope in risk_live["scope"].astype(str).unique():
+    rk = risk_live[risk_live["scope"] == active_data_scope].sort_values("date").iloc[-1]
+    if pd.notna(rk.get("integrated_risk_score")):
+        risk_score = float(rk["integrated_risk_score"])
+    risk_level = str(rk.get("risk_level", "")).replace("_", " ").upper() if pd.notna(rk.get("risk_level")) else None
+    risk_date = pd.to_datetime(rk["date"]).date()
+
 cols = st.columns(6)
-metrics = [("🗺️ Landscape", f"{project_zone_area_ha:,.0f} ha", "Carbon Zone envelope"),("🟣 Carbon Zone", f"{project_zone_area_ha:,.0f} ha", "official ProjectZone area"),("🟢 Project Area", f"{project_area_ha:,.0f} ha", f"{zone_share:.2f}% of Carbon Zone"),("🌧 Rainfall", "Live", "GPM IMERG"),("🔥 Hotspots", "Live", "VIIRS"),("🟣 Carbon Risk", "Live", "screening")]
+metrics = [
+    ("🗺️ Landscape", f"{project_zone_area_ha:,.0f} ha", "Carbon Zone envelope"),
+    ("🟣 Carbon Zone", f"{project_zone_area_ha:,.0f} ha", "official ProjectZone area"),
+    ("🟢 Project Area", f"{project_area_ha:,.0f} ha", f"{zone_share:.2f}% of Carbon Zone"),
+    ("🌧 Rainfall", f"{rain_value:.2f} mm" if rain_value is not None else "—", f"Latest · {rain_date}" if rain_date else "No data"),
+    ("🔥 Hotspots", f"{fire_count:,}" if fire_count is not None else "—", f"Latest day · {fire_date}" if fire_date else "No data"),
+    ("🟣 Carbon Risk", f"{risk_score:.1f} / 15" if risk_score is not None else "—", risk_level or "No data"),
+]
 for col, (label, value, delta) in zip(cols, metrics):
     with col:
         st.markdown(f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="metric-delta">{delta}</div></div>', unsafe_allow_html=True)
@@ -63,14 +102,13 @@ with map_col:
     focus = "All Boundaries" if scope == "SERPRO Project Landscape" else scope
     st_folium(render_map(data["hotspots"], data["monitoring_points"], focus=focus), width=None, height=500, returned_objects=[], key="monitoring_scope_map")
 with risk_col:
-    st.markdown('<div class="risk-card"><div>CLIMATE RISK INDEX</div><div class="risk-number">LIVE</div><div class="risk-label">See Climate Risk page</div><hr><p>Use the dedicated Climate Risk module for the integrated screening score.</p></div>', unsafe_allow_html=True)
+    if risk_score is not None:
+        st.markdown(f'<div class="risk-card"><div>CLIMATE RISK INDEX</div><div class="risk-number">{risk_score:.1f}</div><div class="risk-label">{risk_level or "SCREENING"}</div><hr><p>Assessment date: {risk_date}</p><p>Use the dedicated Climate Risk module for component-level diagnostics.</p></div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="risk-card"><div>CLIMATE RISK INDEX</div><div class="risk-number">—</div><div class="risk-label">NO DATA</div><hr><p>Integrated risk output is not available for the selected scope.</p></div>', unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
-# LIVE TREND EXPLORER
-# -----------------------------------------------------------------------------
 st.markdown('<div class="section-title">📈 Monitoring Trends</div>', unsafe_allow_html=True)
 st.caption("Annual and monthly trends are sourced from connected processed datasets. Monthly availability depends on the selected indicator.")
-
 trend_col1, trend_col2, trend_col3 = st.columns([1.4, 1.2, 1.2])
 with trend_col1:
     trend_indicator = st.selectbox("Indicator", ["Rainfall", "Hotspots", "Burned Area", "NDMI"], key="trend_indicator")
@@ -101,7 +139,6 @@ if trend_indicator == "Rainfall":
     else:
         st.warning("Historical CHIRPS monthly dataset belum tersedia.")
         ylabel = "Rainfall"
-
 elif trend_indicator == "Hotspots":
     if granularity == "Annual":
         path = Path("data/processed/climate/fire/hotspot_history_2017_2025.csv")
@@ -122,7 +159,6 @@ elif trend_indicator == "Hotspots":
         else:
             ylabel = "Hotspot observations"
             st.info("Belum ada live hotspot data untuk tren bulanan.")
-
 elif trend_indicator == "Burned Area":
     if granularity == "Annual":
         path = Path("data/processed/climate/fire/burned_area_annual_2016_2025.csv")
@@ -135,8 +171,7 @@ elif trend_indicator == "Burned Area":
     else:
         ylabel = "Burned area (ha)"
         st.info("Burned Area tersedia saat ini sebagai seri tahunan 2016–2025. Pilih Aggregation = Annual.")
-
-else:  # NDMI
+else:
     ndmi = load_ndmi()
     if not ndmi.empty:
         ndmi = ndmi[ndmi["scope"] == trend_scope].copy()
@@ -169,7 +204,6 @@ if not trend_df.empty:
         if len(years) > 1:
             selected_years = st.slider("Filter year", min_value=int(min(years)), max_value=int(max(years)), value=(int(min(years)), int(max(years))), key="trend_year_range")
             trend_df = trend_df[(trend_df["date"] >= selected_years[0]) & (trend_df["date"] <= selected_years[1])]
-
     if not trend_df.empty:
         x = pd.to_datetime(trend_df["date"]) if granularity == "Monthly" else trend_df["date"]
         fig = px.line(trend_df, x=x, y=value_col, markers=True, labels={"x":"Date", value_col:ylabel}, title=f"{trend_indicator} · {granularity} · {trend_scope.replace('_',' ').title()}")
@@ -181,9 +215,6 @@ if not trend_df.empty:
     else:
         st.info("Tidak ada observasi pada filter yang dipilih.")
 
-# -----------------------------------------------------------------------------
-# Recent live alerts
-# -----------------------------------------------------------------------------
 st.markdown('<div class="section-title">🚨 Recent Alerts</div>', unsafe_allow_html=True)
 alerts_live = []
 try:
@@ -197,7 +228,6 @@ try:
             alerts_live.append({"type":"🔥 High-confidence hotspot","location":scope_label,"date":pd.to_datetime(row["date"]).strftime("%d %b %Y"),"level":priority,"action":"FIELD ALERT" if priority=="HIGH" else "VERIFY","detail":f"VIIRS · {float(row['latitude']):.4f}, {float(row['longitude']):.4f}"})
 except Exception:
     pass
-
 try:
     anom = load_anomaly()
     if not anom.empty and "anomaly_30d_pct" in anom.columns:
@@ -210,7 +240,6 @@ try:
                 alerts_live.append({"type":"🌧 Rainfall anomaly","location":scope_label,"date":latest_anom_date.strftime("%d %b %Y"),"level":"MODERATE","action":"REVIEW","detail":f"30-day anomaly {float(value):+.1f}%"})
 except Exception:
     pass
-
 try:
     ndmi = load_ndmi()
     if not ndmi.empty and "ndmi" in ndmi.columns:
@@ -227,7 +256,6 @@ try:
                 alerts_live.append({"type":"🌿 NDMI decline","location":scope_label,"date":pd.to_datetime(latest["date"]).strftime("%d %b %Y"),"level":"MODERATE","action":"REVIEW","detail":f"NDMI change {change:+.3f}"})
 except Exception:
     pass
-
 if not alerts_live:
     st.success("No active live alerts in the connected monitoring modules for the latest available observations.")
 else:
