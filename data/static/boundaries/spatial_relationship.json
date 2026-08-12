@@ -1,0 +1,25 @@
+{
+  "analysis_name": "SERPRO Project Area vs Carbon Project Zone Spatial Relationship",
+  "project": "Seruyan Restoration Ecosystem Project (SERPRO)",
+  "project_owner": "PT Kalamanthana Alam Lestari",
+  "source_metrics": {
+    "intersection_area_ha": 31685.38491,
+    "union_area_ha": 150142.543553,
+    "project_area_ha": 31685.38489,
+    "carbon_project_zone_area_ha": 150142.5436
+  },
+  "derived_metrics": {
+    "intersection_as_percent_of_project_area": 100.0000000631,
+    "intersection_as_percent_of_carbon_zone": 21.1035354472,
+    "project_area_as_percent_of_carbon_zone": 21.1035354339,
+    "project_area_only_area_ha": 0.00002,
+    "carbon_zone_only_area_ha": 118457.15869
+  },
+  "interpretation": {
+    "relationship": "Project Area is effectively fully contained within the Carbon Project Zone, within numerical geometry tolerance.",
+    "intersection_equals_project_area": true,
+    "union_equals_carbon_project_zone": true,
+    "display_rounding": "Report containment as approximately 100%; do not interpret floating-point residuals as meaningful land area."
+  },
+  "note": "Metrics supplied from project GIS spatial analysis."
+}
