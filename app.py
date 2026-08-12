@@ -8,9 +8,9 @@ from utils.map import load_carbon_project_zone, load_project_area, render_map
 setup_page()
 data = load_demo_data()
 
-st.markdown('<div class="brand">🌿 SERPRO Climate & Carbon Monitoring</div>', unsafe_allow_html=True)
+st.markdown('<div class="brand">🌿 SERPRO Climate & Carbon Monitoring <span class="prototype-badge">PROTOTYPE</span></div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Seruyan Restoration Ecosystem Project (SERPRO) · PT Kalamanthana Alam Lestari</div>', unsafe_allow_html=True)
-st.markdown('<div class="status">● Demo analytics · Official project boundaries loaded · Last update: 12 Aug 2026 20:00 WIB</div>', unsafe_allow_html=True)
+st.markdown('<div class="status">● Prototype · Official project boundaries loaded · Live climate/fire modules connected incrementally</div>', unsafe_allow_html=True)
 
 # Official boundary context
 project_area = load_project_area()
@@ -81,7 +81,6 @@ with summary_info_col:
         unsafe_allow_html=True,
     )
 
-# Simple monitoring-scope selector. The previous Scope Engine diagram has been removed.
 st.markdown('<div class="section-title">Monitoring Scope</div>', unsafe_allow_html=True)
 scope = st.selectbox(
     "Select monitoring scope",
@@ -144,4 +143,4 @@ for _, alert in data["alerts"].iterrows():
     cls = "alert-high" if priority == "HIGH" else "alert-medium" if priority == "MEDIUM" else "alert-low"
     st.markdown(f'<div class="{cls}"><b>{alert["Type"]}</b> · {alert["Location"]} · {alert["Date"]} · <b>{priority}</b></div>', unsafe_allow_html=True)
 
-st.caption("Scope note: SERPRO Carbon Project Zone is the primary monitoring envelope; SERPRO Project Area is a contained subset. Monitoring indicators remain demo values until live spatial datasets are connected and filtered by scope.")
+st.caption("Prototype status: this interface is an evolving monitoring prototype. Live climate and fire modules are being connected incrementally; demo indicators on this landing page should not be interpreted as operational carbon-accounting outputs.")
