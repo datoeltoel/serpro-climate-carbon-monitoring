@@ -1,0 +1,13 @@
+{
+  "baseline_source": "CHIRPS v2 Final",
+  "baseline_period": "1991-2020",
+  "current_source": "GPM IMERG V07",
+  "status_method": "monthly rainfall anomaly percent against CHIRPS 1991-2020 mean",
+  "status_thresholds_pct": {
+    "very_wet": ">= +50%",
+    "wet": "+20% to < +50%",
+    "normal": "> -20% to < +20%",
+    "dry": "-50% to <= -20%",
+    "drought": "<= -50%"
+  }
+}
