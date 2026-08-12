@@ -78,26 +78,31 @@ c2.metric("Hotspots — last 7D", f"{len(last7)}")
 c3.metric("High confidence — last 7D", f"{high7}")
 c4.metric("Latest selected observation", selected_latest.date().isoformat())
 
-st.markdown("### Confidence & operational response")
+st.markdown("### Confidence level")
 legend_cols = st.columns(3)
 legend = [
-    ("LOW", "#9E9E9E", low7, "WATCH", "Retain for monitoring; no immediate field dispatch."),
-    ("MODERATE", "#F9A825", moderate7, "VERIFY", "Review satellite context and nearby reports."),
-    ("HIGH", "#D32F2F", high7, "FIELD ALERT", "Prioritize ground verification / patrol follow-up."),
+    ("LOW", "#9E9E9E", low7, "WATCH", "Monitoring rutin"),
+    ("MODERATE", "#F9A825", moderate7, "VERIFY", "Verifikasi konteks"),
+    ("HIGH", "#D32F2F", high7, "FIELD ALERT", "Prioritas tindak lanjut lapangan"),
 ]
 for col, (label, color, count, action, text) in zip(legend_cols, legend):
     with col:
         st.markdown(
-            f"<div style='border-left:6px solid {color};padding:12px 14px;border-radius:8px;background:#FAFBFA;'>"
-            f"<b style='color:{color}'>{label}</b><br><span style='font-size:1.5rem;font-weight:800'>{count}</span> hotspots (7D)"
-            f"<br><span style='font-weight:700'>{action}</span><br><span style='font-size:.78rem;color:#65736D'>{text}</span></div>",
+            f"""
+            <div style='border-left:5px solid {color};padding:10px 14px 9px 14px;border-radius:8px;background:#FAFBFA;min-height:104px;'>
+              <div style='font-size:0.78rem;font-weight:700;color:{color};letter-spacing:.04em'>{label}</div>
+              <div style='font-size:2rem;line-height:1.0;font-weight:800;margin:5px 0 4px 0'>{count}</div>
+              <div style='font-size:0.75rem;color:#65736D;line-height:1.25'>{text}</div>
+              <div style='font-size:0.70rem;font-weight:700;margin-top:4px;color:#46524D'>{action}</div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-st.info(
-    f"**Latest available selected observation:** {selected_latest.date()} · **Sources:** NASA LANCE VIIRS S-NPP + NOAA-20 · "
-    "**Resolution:** 375 m · Confidence is source-native (Low / Nominal / High); SERPRO displays Nominal as Moderate. "
-    "Hotspots are satellite detections and must be verified in the field."
+st.caption(
+    f"Latest selected observation: {selected_latest.date()} · Sources: NASA LANCE VIIRS S-NPP + NOAA-20 · "
+    "Resolution: 375 m · Native confidence: Low / Nominal / High; SERPRO displays Nominal as Moderate. "
+    "Hotspots are satellite detections and require field verification."
 )
 
 alerts = build_field_alerts(scoped, selected_latest)
@@ -118,7 +123,7 @@ else:
             )
 
 st.markdown("### 🗺️ SERPRO Fire Monitoring Map")
-st.caption("Live/near-real-time VIIRS hotspot map for the selected monitoring period. Purple = Carbon Project Zone; green = Project Area; gray/yellow/red = Low/Moderate/High confidence.")
+st.caption("Selected monitoring period. Purple = Carbon Project Zone; green = Project Area; gray/yellow/red = Low/Moderate/High confidence.")
 m = folium.Map(location=[-3.10, 112.62], zoom_start=9, tiles="CartoDB positron", control_scale=True)
 zone = load_carbon_project_zone()
 area = load_project_area()
