@@ -1,0 +1,37 @@
+name: Build SPI-3 and SPI-6
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * *" # 10:30 WIB daily
+
+permissions:
+  contents: write
+
+jobs:
+  spi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build SPI
+        run: python scripts/build_spi.py
+
+      - name: Commit SPI data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/processed/climate/rainfall/spi_current.csv \
+            data/processed/climate/rainfall/spi_historical_1981_2025.csv \
+            data/processed/climate/rainfall/spi_metadata.json
+          git diff --cached --quiet || git commit -m "data: update SPI-3 SPI-6"
+          git push
