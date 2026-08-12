@@ -1,0 +1,12 @@
+{
+  "project": "Seruyan Restoration Ecosystem Project",
+  "short_name": "SERPRO",
+  "owner": "PT Kalamanthana Alam Lestari",
+  "boundary_type": "carbon_project_zone",
+  "source_file": "ProjectZone.kmz",
+  "source_layer": "Project Area KAL",
+  "crs": "EPSG:4326",
+  "geometry_type": "Polygon",
+  "status": "source-integrated",
+  "note": "This boundary is distinct from the PT Kalamanthana Alam Lestari concession/project area boundary (KAL_Boundary_Split.kml)."
+}
