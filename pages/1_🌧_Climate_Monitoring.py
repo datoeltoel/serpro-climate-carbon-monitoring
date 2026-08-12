@@ -5,6 +5,7 @@ import plotly.express as px
 from utils.climate.rainfall import load_rainfall
 from utils.climate.anomaly import load_anomaly
 from utils.climate.spi import load_spi
+from utils.climate.risk import load_risk
 from utils.ui import setup_page
 
 setup_page()
@@ -15,6 +16,7 @@ st.caption("SERPRO Project · GPM IMERG current rainfall + CHIRPS historical bas
 rainfall = load_rainfall()
 anomaly = load_anomaly()
 spi = load_spi()
+risk = load_risk()
 
 if rainfall.empty:
     st.warning("Belum ada data rainfall otomatis. Jalankan workflow **Update SERPRO Rainfall** di GitHub Actions terlebih dahulu.")
@@ -43,6 +45,22 @@ processed_at = str(latest_row["processing_time_utc"])
 source_label = {"NASA/GPM_L3/IMERG_V07": "NASA GPM IMERG V07"}.get(source, source)
 
 st.info(f"**Latest available observation:** {latest_date.date()} · **Source:** {source_label} · **Processed:** {processed_at}")
+
+if not risk.empty:
+    r = risk[risk["scope"] == scope].sort_values("date")
+    if not r.empty:
+        rr = r.iloc[-1]
+        risk_level = str(rr["risk_level"]).replace("_", " ").title()
+        risk_icon = {"Low": "🟢", "Moderate": "🟡", "High": "🟠", "Very High": "🔴"}.get(risk_level, "⚪")
+        st.subheader("Climate Risk")
+        c0, c1, c2, c3 = st.columns(4)
+        c0.metric("Risk level", f"{risk_icon} {risk_level}")
+        c1.metric("30-day anomaly", f"{float(rr['anomaly_30d_pct']):+.1f}%" if pd.notna(rr.get("anomaly_30d_pct")) else "—")
+        c2.metric("SPI-3", f"{float(rr['spi_3']):+.2f}" if pd.notna(rr.get("spi_3")) else "—")
+        c3.metric("SPI-6", f"{float(rr['spi_6']):+.2f}" if pd.notna(rr.get("spi_6")) else "—")
+        st.caption(f"Risk basis: {rr['risk_basis']}. Current v1 uses rainfall indicators only; NDMI and fire indicators will be added before full operational risk is declared.")
+else:
+    st.info("Climate risk output belum tersedia. Jalankan workflow **Build Climate Risk**.")
 
 if not anomaly.empty:
     scoped_anom = anomaly[anomaly["scope"] == scope].sort_values("date")
