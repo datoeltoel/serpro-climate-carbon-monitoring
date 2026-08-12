@@ -11,6 +11,12 @@ The WebGIS explicitly separates two official spatial layers:
 
 Carbon/MRV metrics should default to the **Carbon Project Zone** unless a metric is explicitly labelled as concession / Project Area level.
 
+The Overview dashboard now includes a **Monitoring Scope** selector:
+
+- `All Boundaries` — view both official boundaries.
+- `SERPRO Project Area` — focus the map on the concession / Project Area.
+- `Carbon Project Zone` — focus the map on the SERPRO carbon project boundary.
+
 ## MVP
 
 The first release focuses on:
