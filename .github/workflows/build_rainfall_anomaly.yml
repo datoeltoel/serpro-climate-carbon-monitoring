@@ -2,14 +2,18 @@ name: Build Rainfall Anomaly
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Update SERPRO Rainfall"]
+    types: [completed]
   schedule:
-    - cron: "45 2 * * *" # 09:45 WIB daily, after rainfall update
+    - cron: "45 2 * * *" # 09:45 WIB daily fallback
 
 permissions:
   contents: write
 
 jobs:
   anomaly:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
