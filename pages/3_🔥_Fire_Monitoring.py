@@ -6,6 +6,7 @@ from streamlit_folium import st_folium
 
 from utils.climate.fire import load_fire, build_field_alerts, CONFIDENCE_LABEL
 from utils.climate.burned_area import load_burned_area
+from utils.climate.hotspot_history import load_hotspot_history
 from utils.map import load_carbon_project_zone, load_project_area
 from utils.ui import setup_page
 
@@ -116,7 +117,8 @@ else:
                 f"{a['latitude']:.5f}, {a['longitude']:.5f} · {a['source']}"
             )
 
-# Map filtered to selected date range.
+st.markdown("### 🗺️ SERPRO Fire Monitoring Map")
+st.caption("Live/near-real-time VIIRS hotspot map for the selected monitoring period. Purple = Carbon Project Zone; green = Project Area; gray/yellow/red = Low/Moderate/High confidence.")
 m = folium.Map(location=[-3.10, 112.62], zoom_start=9, tiles="CartoDB positron", control_scale=True)
 zone = load_carbon_project_zone()
 area = load_project_area()
@@ -155,9 +157,9 @@ for _, row in scoped.iterrows():
     ).add_to(hotspots_layer)
 hotspots_layer.add_to(m)
 folium.LayerControl(collapsed=False).add_to(m)
-st_folium(m, width=None, height=540, returned_objects=[])
+st_folium(m, width=None, height=560, returned_objects=[])
 
-st.markdown("### Hotspot Trend")
+st.markdown("### Hotspot Trend — Selected Monitoring Period")
 daily = scoped.groupby(["date", "confidence"], as_index=False).size().rename(columns={"size": "hotspots"})
 daily["confidence_label"] = daily["confidence"].map({0: "LOW", 1: "MODERATE", 2: "HIGH"})
 fig = px.bar(
@@ -171,6 +173,31 @@ fig = px.bar(
 )
 fig.update_layout(height=340, margin=dict(l=20, r=20, t=50, b=20))
 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+st.markdown("### 📈 Historical Hotspot Trend — 2017–2025")
+history = load_hotspot_history()
+if history.empty:
+    st.info("Belum ada historical hotspot trend. Jalankan **Update SERPRO Hotspot History** di GitHub Actions.")
+else:
+    hist_scope = history[history["scope"] == scope].copy().sort_values("year")
+    if not hist_scope.empty:
+        h1, h2, h3 = st.columns(3)
+        peak_row = hist_scope.loc[hist_scope["hotspot_detections"].idxmax()]
+        h1.metric("9Y total detections", f"{hist_scope['hotspot_detections'].sum():,.0f}")
+        h2.metric("Annual average", f"{hist_scope['hotspot_detections'].mean():,.0f}")
+        h3.metric("Peak year", f"{int(peak_row['year'])}", f"{int(peak_row['hotspot_detections']):,}")
+
+        hist_fig = px.bar(
+            hist_scope,
+            x="year",
+            y="hotspot_detections",
+            title=f"Annual MODIS Terra fire-pixel detections · {scope.replace('_', ' ').title()} · 2017–2025",
+            labels={"year": "Year", "hotspot_detections": "Fire-pixel detections"},
+            text_auto=".0f",
+        )
+        hist_fig.update_layout(height=380, margin=dict(l=20, r=20, t=55, b=20))
+        st.plotly_chart(hist_fig, use_container_width=True, config={"displayModeBar": False})
+        st.caption("Historical trend source: MODIS Terra MOD14A1.061, 1 km daily FireMask. FireMask classes 7–9 are counted as fire detections. This historical indicator is not directly equivalent to VIIRS 375 m hotspot counts or burned area.")
 
 st.markdown("### 🔥 Burned Area Trend — 10 Years")
 burn = load_burned_area()
@@ -219,5 +246,5 @@ st.dataframe(show.head(200), use_container_width=True, hide_index=True)
 st.caption(
     "Source: NASA/LANCE VIIRS C2. VIIRS NRT active-fire products use native Low/Nominal/High confidence classes at 375 m. "
     "SERPRO maps Nominal to Moderate for operational display. High-confidence detections trigger field follow-up alerts; they are not treated as confirmed ground fires. "
-    "Burned-area history is derived separately from MODIS MCD64A1 v6.1."
+    "Historical hotspot trend is derived separately from MODIS Terra MOD14A1.061, while burned-area history is derived from MODIS MCD64A1 v6.1."
 )
