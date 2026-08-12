@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 import plotly.express as px
 
@@ -57,10 +58,7 @@ if not anomaly.empty:
         st.subheader("Climate Condition")
         c0, c1, c2, c3 = st.columns(4)
         c0.metric("30-day status", f"{icon} {status}")
-        if pd.notna(a.get("anomaly_30d_pct")):
-            c1.metric("30-day anomaly", f"{float(a['anomaly_30d_pct']):+.1f}%")
-        else:
-            c1.metric("30-day anomaly", "—")
+        c1.metric("30-day anomaly", f"{float(a['anomaly_30d_pct']):+.1f}%" if pd.notna(a.get("anomaly_30d_pct")) else "—")
         c2.metric("7-day anomaly", f"{float(a['anomaly_7d_pct']):+.1f}%" if pd.notna(a.get("anomaly_7d_pct")) else "—")
         c3.metric("30-day observations", f"{int(a['obs_count_30d'])}/30")
         st.caption(
