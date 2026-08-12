@@ -1,0 +1,39 @@
+name: Build CHIRPS Daily Climatology
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 2 15 1 *" # 09:15 WIB every 15 January
+
+permissions:
+  contents: write
+
+jobs:
+  daily-climatology:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build daily CHIRPS climatology
+        env:
+          EE_SERVICE_ACCOUNT_JSON: ${{ secrets.EE_SERVICE_ACCOUNT_JSON }}
+          EE_PROJECT_ID: ${{ secrets.EE_PROJECT_ID }}
+        run: python scripts/build_chirps_daily_climatology.py
+
+      - name: Commit daily climatology
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/processed/climate/rainfall/chirps_daily_climatology_1991_2020.csv \
+            data/processed/climate/rainfall/chirps_daily_climatology_metadata.json
+          git diff --cached --quiet || git commit -m "data: update CHIRPS daily climatology"
+          git push
