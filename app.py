@@ -14,18 +14,18 @@ st.markdown('<div class="status">● Demo analytics · Official project boundari
 # Official boundary context
 project_area = load_project_area()
 project_zone = load_carbon_project_zone()
-project_area_ha = 31_685.385
+project_area_ha = 31_685.39
 project_zone_area_ha = 150_142.54
+area_to_zone_pct = project_area_ha / project_zone_area_ha * 100
 
 st.markdown('<div class="section-title">Project Landscape Summary</div>', unsafe_allow_html=True)
 st.markdown(
     """
     <div class="landscape-summary">
       <div class="landscape-intro">
-        <b>Unified SERPRO project landscape</b><br>
+        <b>Unified SERPRO Project Landscape</b><br>
         SERPRO Project Area and SERPRO Carbon Project Zone are two official spatial boundaries
-        describing the same project landscape. They are shown together to preserve their spatial relationship;
-        they are not treated as separate projects.
+        describing the same project landscape. They are spatially overlapping components, not separate projects.
       </div>
       <div class="landscape-grid">
         <div class="landscape-card area-card">
@@ -42,11 +42,41 @@ st.markdown(
           <div class="landscape-meta">Carbon project boundary · ProjectZone.kmz</div>
         </div>
       </div>
-      <div class="landscape-note">Official areas are supplied project values. Spatial overlay is shown on the WebGIS; no overlap percentage is inferred from the two area figures.</div>
+      <div class="landscape-note">
+        Official project-area values. The 21.10% figure below is an area ratio only; it is not presented as the geometric overlap percentage.
+      </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
+
+summary_map_col, summary_info_col = st.columns([2.4, 1])
+with summary_map_col:
+    st_folium(
+        render_map(data["hotspots"], data["monitoring_points"], focus="All Boundaries"),
+        width=None,
+        height=430,
+        returned_objects=[],
+        key="project_landscape_summary_map",
+    )
+with summary_info_col:
+    st.markdown(
+        f"""
+        <div class="risk-card">
+          <div><b>LANDSCAPE RELATIONSHIP</b></div>
+          <div class="risk-number">{area_to_zone_pct:.2f}%</div>
+          <div class="risk-label">PROJECT AREA / CARBON ZONE</div>
+          <hr>
+          <p><b>🟢 Project Area</b><br>{project_area_ha:,.2f} ha</p>
+          <p><b>🟣 Carbon Project Zone</b><br>{project_zone_area_ha:,.2f} ha</p>
+          <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,.09);font-size:.82rem;line-height:1.45;">
+            Both boundaries are displayed simultaneously to show their spatial relationship.
+            The ratio is an area comparison, not an overlap calculation.
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 st.markdown('<div class="section-title">Monitoring Scope</div>', unsafe_allow_html=True)
 scope = st.radio(
@@ -87,6 +117,7 @@ with map_col:
         width=None,
         height=500,
         returned_objects=[],
+        key="monitoring_scope_map",
     )
 with risk_col:
     st.markdown('<div class="risk-card"><div>CLIMATE RISK INDEX</div><div class="risk-number">68</div><div class="risk-label">HIGH RISK</div><hr>', unsafe_allow_html=True)
