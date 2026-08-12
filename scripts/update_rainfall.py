@@ -1,4 +1,4 @@
-"""Earth Engine rainfall query for SERPRO scopes."""
+"""Earth Engine rainfall query for SERPRO scopes using NASA GPM IMERG V07."""
 from __future__ import annotations
 
 import csv
@@ -6,7 +6,7 @@ import gzip
 import json
 import os
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import ee
@@ -16,11 +16,12 @@ KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 PROJECT_AREA_KML = Path("data/static/project_boundary.kml.gz")
 PROJECT_ZONE_GEOJSON = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 OUTPUT = Path("data/processed/climate/rainfall/rainfall_daily.csv")
-COLLECTION = "UCSB-CHC/CHIRPS/V3/DAILY_SAT"
+COLLECTION = "NASA/GPM_L3/IMERG_V07"
+PRECIP_BAND = "precipitation"
+HALF_HOUR_HOURS = 0.5
 
 
 def authenticate_ee() -> None:
-    """Authenticate Earth Engine using a service-account JSON secret."""
     key_json = os.environ.get("EE_SERVICE_ACCOUNT_JSON")
     cloud_project = os.environ.get("EE_PROJECT_ID")
     if not key_json or not cloud_project:
@@ -34,32 +35,17 @@ def authenticate_ee() -> None:
     required = ("type", "project_id", "private_key", "client_email", "token_uri")
     missing = [field for field in required if not info.get(field)]
     if missing:
-        raise RuntimeError(
-            "EE_SERVICE_ACCOUNT_JSON is missing required fields: " + ", ".join(missing)
-        )
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON is missing required fields: " + ", ".join(missing))
 
-    private_key = info["private_key"]
-    normalized_key = private_key.strip()
-    if "..." in normalized_key:
-        raise RuntimeError(
-            "EE_SERVICE_ACCOUNT_JSON contains placeholder text ('...') in private_key. "
-            "Paste the complete original JSON key downloaded from Google Cloud."
-        )
-    if not normalized_key.startswith("-----BEGIN PRIVATE KEY-----"):
-        raise RuntimeError(
-            "EE_SERVICE_ACCOUNT_JSON private_key does not start with the expected PEM header. "
-            "Use the original service-account JSON downloaded from Google Cloud."
-        )
-    if not normalized_key.endswith("-----END PRIVATE KEY-----"):
-        raise RuntimeError(
-            "EE_SERVICE_ACCOUNT_JSON private_key does not contain the expected PEM footer. "
-            "Use the original service-account JSON downloaded from Google Cloud."
-        )
-    if len(normalized_key) < 500:
-        raise RuntimeError(
-            "EE_SERVICE_ACCOUNT_JSON private_key appears truncated. "
-            "Paste the complete original JSON key from Google Cloud."
-        )
+    private_key = info["private_key"].strip()
+    if "..." in private_key:
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON contains placeholder text ('...') in private_key.")
+    if not private_key.startswith("-----BEGIN PRIVATE KEY-----"):
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON private_key does not start with the expected PEM header.")
+    if not private_key.endswith("-----END PRIVATE KEY-----"):
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON private_key does not contain the expected PEM footer.")
+    if len(private_key) < 500:
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON private_key appears truncated.")
 
     credentials = service_account.Credentials.from_service_account_info(
         info,
@@ -97,35 +83,45 @@ def project_zone_geometry() -> ee.Geometry:
     return ee.Geometry(features[0]["geometry"])
 
 
-def zonal_mean(image: ee.Image, geometry: ee.Geometry) -> float:
-    value = image.reduceRegion(
+def zonal_daily_rainfall(collection: ee.ImageCollection, geometry: ee.Geometry) -> float:
+    # IMERG precipitation is a rain rate (mm/hour) on 30-minute images.
+    # Convert each half-hour rate to mm per interval, then sum across the day.
+    daily_mm = collection.select(PRECIP_BAND).sum().multiply(HALF_HOUR_HOURS)
+    value = daily_mm.reduceRegion(
         reducer=ee.Reducer.mean(),
         geometry=geometry,
-        scale=5566,
+        scale=11132,
         maxPixels=1_000_000,
         bestEffort=True,
-    ).get("precipitation")
+    ).get(PRECIP_BAND)
     result = value.getInfo() if value is not None else None
     return float(result) if result is not None else float("nan")
 
 
-def fetch_day(date_value, scopes):
+def latest_available_date() -> date | None:
+    collection = ee.ImageCollection(COLLECTION)
+    latest_ms = collection.aggregate_max("system:time_start").getInfo()
+    if latest_ms is None:
+        return None
+    return datetime.fromtimestamp(latest_ms / 1000, tz=timezone.utc).date()
+
+
+def fetch_day(date_value: date, scopes):
     start = ee.Date(date_value.strftime("%Y-%m-%d"))
     end = start.advance(1, "day")
-    collection = ee.ImageCollection(COLLECTION).filterDate(start, end).select("precipitation")
+    collection = ee.ImageCollection(COLLECTION).filterDate(start, end)
     count = collection.size().getInfo()
     if count == 0:
-        print(f"No CHIRPS image available for {date_value}; skipping.")
+        print(f"No GPM IMERG image available for {date_value}; skipping.")
         return []
 
-    image = ee.Image(collection.mean())
     rows = []
     for scope_name, geometry in scopes.items():
         rows.append(
             {
                 "date": date_value.strftime("%Y-%m-%d"),
                 "scope": scope_name,
-                "rainfall_mm": zonal_mean(image, geometry),
+                "rainfall_mm": zonal_daily_rainfall(collection, geometry),
                 "source": COLLECTION,
                 "processing_time_utc": datetime.now(timezone.utc).isoformat(),
             }
@@ -139,17 +135,18 @@ def main() -> None:
         "carbon_project_zone": project_zone_geometry(),
         "project_area": project_area_geometry(),
     }
-    today = datetime.now(timezone.utc).date()
-    dates = [today - timedelta(days=i) for i in range(7, -1, -1)]
+
+    latest = latest_available_date()
+    if latest is None:
+        raise RuntimeError("GPM IMERG collection contains no observations.")
+
+    dates = [latest - timedelta(days=i) for i in range(7, -1, -1)]
     rows = []
     for date_value in dates:
         rows.extend(fetch_day(date_value, scopes))
 
     if not rows:
-        raise RuntimeError(
-            "No CHIRPS rainfall observations were available for the requested period. "
-            "Check CHIRPS collection availability and Earth Engine access."
-        )
+        raise RuntimeError("No GPM IMERG rainfall observations were available.")
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT.open("w", newline="", encoding="utf-8") as fh:
@@ -157,6 +154,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
     print(f"Wrote {len(rows)} rows to {OUTPUT}")
+    print(f"Latest available GPM date: {latest}")
 
 
 if __name__ == "__main__":
