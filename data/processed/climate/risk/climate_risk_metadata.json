@@ -1,0 +1,19 @@
+{
+  "version": "v1",
+  "scope": [
+    "carbon_project_zone",
+    "project_area"
+  ],
+  "inputs": [
+    "30-day rainfall anomaly",
+    "SPI-3",
+    "SPI-6"
+  ],
+  "status": "provisional until vegetation moisture and fire indicators are integrated",
+  "risk_levels": {
+    "low": "0-1",
+    "moderate": "2-3",
+    "high": "4-5",
+    "very_high": ">=6"
+  }
+}
