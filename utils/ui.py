@@ -29,6 +29,15 @@ def setup_page():
     .landscape-connector {text-align:center; color:#6A4C93; font-size:2rem; font-weight:700; line-height:1;}
     .landscape-connector span {display:block; color:#68776F; font-size:.62rem; letter-spacing:.07em; line-height:1.25; margin-top:5px;}
     .landscape-note {font-size:.72rem; color:#7A8781; margin-top:12px; padding-top:10px; border-top:1px solid #EDF1EF;}
+    .relationship-card {background:#12382A; color:white; border-radius:16px; padding:18px 20px; min-height:430px; box-shadow:0 1px 3px rgba(0,0,0,.08);}
+    .relationship-title {font-size:.78rem; font-weight:800; letter-spacing:.08em; opacity:.86;}
+    .relationship-hero {font-size:3rem; font-weight:800; line-height:1; margin:12px 0 3px;}
+    .relationship-sub {font-size:.78rem; font-weight:700; letter-spacing:.05em; opacity:.9;}
+    .relationship-row {display:flex; justify-content:space-between; gap:10px; font-size:.83rem; margin:8px 0;}
+    .relationship-row span {opacity:.8;}
+    .relationship-divider {border-top:1px solid rgba(255,255,255,.18); margin:12px 0;}
+    .relationship-note {font-size:.74rem; line-height:1.45; margin-top:12px; padding:9px 10px; border-radius:8px; background:rgba(255,255,255,.08);}
+    .relationship-footnote {font-size:.65rem; line-height:1.4; opacity:.68; margin-top:10px;}
     .risk-card {background:#12382A; color:white; border-radius:16px; padding:20px; min-height:260px;}
     .risk-number {font-size:3.1rem; font-weight:800; line-height:1; margin:12px 0 3px;}
     .risk-label {font-size:1rem; font-weight:700; letter-spacing:.04em;}
@@ -39,6 +48,7 @@ def setup_page():
       .landscape-grid {grid-template-columns:1fr; gap:8px;}
       .landscape-connector {font-size:1.5rem;}
       .landscape-connector span {display:inline; margin-left:6px;}
+      .relationship-card {min-height:auto;}
     }
     </style>
     """, unsafe_allow_html=True)
