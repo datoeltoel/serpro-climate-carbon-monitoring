@@ -1,0 +1,1 @@
+Normalized coordinates are derived from ProjectZone.kmz and encoded in the KML's decimal-comma format. The canonical geometry remains the source input supplied by the project team.
