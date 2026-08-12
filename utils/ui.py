@@ -38,6 +38,14 @@ def setup_page():
     .relationship-divider {border-top:1px solid rgba(255,255,255,.18); margin:12px 0;}
     .relationship-note {font-size:.74rem; line-height:1.45; margin-top:12px; padding:9px 10px; border-radius:8px; background:rgba(255,255,255,.08);}
     .relationship-footnote {font-size:.65rem; line-height:1.4; opacity:.68; margin-top:10px;}
+    .scope-engine {background:#F8FAF9; border:1px solid #E0E7E3; border-radius:14px; padding:16px 18px; margin-bottom:10px;}
+    .scope-node {display:flex; flex-direction:column; padding:12px 14px; border-radius:10px; border-left:5px solid; max-width:620px;}
+    .scope-node b {font-size:.95rem; color:#173D2D;}
+    .scope-node span {font-size:.75rem; color:#708078; margin-top:2px;}
+    .scope-node.root {background:#EEF6F2; border-left-color:#173D2D;}
+    .scope-node.zone {background:#F5F0FB; border-left-color:#6A4C93; margin-left:28px;}
+    .scope-node.area {background:#F0F8F4; border-left-color:#146B43; margin-left:56px;}
+    .scope-line {margin:3px 0 3px 31px; color:#6A4C93; font-size:1.1rem; line-height:1;}
     .risk-card {background:#12382A; color:white; border-radius:16px; padding:20px; min-height:260px;}
     .risk-number {font-size:3.1rem; font-weight:800; line-height:1; margin:12px 0 3px;}
     .risk-label {font-size:1rem; font-weight:700; letter-spacing:.04em;}
@@ -49,6 +57,9 @@ def setup_page():
       .landscape-connector {font-size:1.5rem;}
       .landscape-connector span {display:inline; margin-left:6px;}
       .relationship-card {min-height:auto;}
+      .scope-node.zone {margin-left:14px;}
+      .scope-node.area {margin-left:28px;}
+      .scope-line {margin-left:15px;}
     }
     </style>
     """, unsafe_allow_html=True)
