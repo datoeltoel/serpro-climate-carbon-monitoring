@@ -1,0 +1,1 @@
+SERPRO Carbon Project Zone source inspected from ProjectZone.kmz. One valid Polygon, EPSG:4326. Keep separate from concession/project-area boundary KAL_Boundary_Split.kml.
