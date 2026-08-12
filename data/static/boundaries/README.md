@@ -1,13 +1,10 @@
-# Boundary Definitions
+# Official SERPRO Boundary Layers
 
-## 1. SERPRO Project Area / Concession Boundary
-Source: `KAL_Boundary_Split.kml`
+The WebGIS uses two official spatial concepts and keeps them separate:
 
-This represents the concession / project area of PT Kalamanthana Alam Lestari.
+1. **SERPRO Project Area (Concession)** — the full PT Kalamanthana Alam Lestari concession/project area, sourced from `KAL_Boundary_Split.kml` and preserved as the official concession source layer.
+2. **SERPRO Carbon Project Zone** — the carbon project boundary for the Seruyan Restoration Ecosystem Project (SERPRO), sourced from `ProjectZone.kmz` and represented in the public WebGIS by `serpro_carbon_project_zone_web.geojson`.
 
-## 2. SERPRO Carbon Project Zone
-Source: `ProjectZone.kmz`
+These layers are not synonyms. Carbon/MRV indicators should use the Carbon Project Zone by default, while concession-level monitoring can use the full SERPRO Project Area.
 
-This represents the carbon project zone for the Seruyan Restoration Ecosystem Project (SERPRO).
-
-These two boundaries must remain separate in the WebGIS and dashboard. Carbon-project metrics should use the Project Zone unless a metric is explicitly labelled as applying to the wider Project Area / concession.
+The public WebGIS geometries are generalized for rendering performance. Source filenames and roles are retained in `boundary_metadata.json`.
