@@ -1,1 +1,0 @@
-Source file is ProjectZone.kmz (uploaded by project team). Binary source is intentionally not stored as repository text; the normalized GeoJSON layer is the WebGIS source.
