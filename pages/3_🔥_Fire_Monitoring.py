@@ -5,6 +5,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from utils.climate.fire import load_fire, build_field_alerts, CONFIDENCE_LABEL
+from utils.climate.burned_area import load_burned_area
 from utils.map import load_carbon_project_zone, load_project_area
 from utils.ui import setup_page
 
@@ -43,7 +44,6 @@ c2.metric("Hotspots — 7D", f"{len(last7)}")
 c3.metric("High confidence — 7D", f"{high7}")
 c4.metric("Latest observation", latest_date.date().isoformat())
 
-# Operational confidence legend
 st.markdown("### Confidence & operational response")
 legend_cols = st.columns(3)
 legend = [
@@ -66,7 +66,6 @@ st.info(
     "Hotspots are satellite detections and must be verified in the field."
 )
 
-# Field alerts
 alerts = build_field_alerts(scoped, latest_date)
 st.markdown("### 🚨 Field Follow-up Alerts")
 if alerts.empty:
@@ -84,7 +83,6 @@ else:
                 f"{a['latitude']:.5f}, {a['longitude']:.5f} · {a['source']}"
             )
 
-# Map
 m = folium.Map(location=[-3.10, 112.62], zoom_start=9, tiles="CartoDB positron", control_scale=True)
 zone = load_carbon_project_zone()
 area = load_project_area()
@@ -138,6 +136,33 @@ fig = px.bar(
 fig.update_layout(height=340, margin=dict(l=20, r=20, t=50, b=20))
 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
+st.markdown("### 🔥 Burned Area Trend — 10 Years")
+burn = load_burned_area()
+if burn.empty:
+    st.info("Belum ada historical burned-area data. Jalankan **Update SERPRO Burned Area History** di GitHub Actions.")
+else:
+    burn_scope = burn[burn["scope"] == scope].copy().sort_values("year")
+    if not burn_scope.empty:
+        total_10y = burn_scope["burned_area_ha"].sum()
+        avg_10y = burn_scope["burned_area_ha"].mean()
+        peak = burn_scope.loc[burn_scope["burned_area_ha"].idxmax()]
+        b1, b2, b3 = st.columns(3)
+        b1.metric("10Y total burned area", f"{total_10y:,.1f} ha")
+        b2.metric("10Y annual average", f"{avg_10y:,.1f} ha/year")
+        b3.metric("Peak year", f"{int(peak['year'])}", f"{peak['burned_area_ha']:,.1f} ha")
+
+        burn_fig = px.bar(
+            burn_scope,
+            x="year",
+            y="burned_area_ha",
+            title=f"Annual burned area · {scope.replace('_', ' ').title()} · 2016–2025",
+            labels={"year": "Year", "burned_area_ha": "Burned area (ha)"},
+            text_auto=".0f",
+        )
+        burn_fig.update_layout(height=380, margin=dict(l=20, r=20, t=55, b=20))
+        st.plotly_chart(burn_fig, use_container_width=True, config={"displayModeBar": False})
+        st.caption("Source: MODIS MCD64A1 v6.1 monthly burned-area product at 500 m. Trend uses ten complete calendar years (2016–2025); 2026 is excluded because the current year is incomplete.")
+
 st.markdown("### Recent Hotspot Observations")
 show = scoped.sort_values(["date", "confidence"], ascending=[False, False]).copy()
 show["Confidence"] = show["confidence"].map({0: "LOW", 1: "MODERATE", 2: "HIGH"})
@@ -153,5 +178,6 @@ st.dataframe(show.head(200), use_container_width=True, hide_index=True)
 
 st.caption(
     "Source: NASA/LANCE VIIRS C2. VIIRS NRT active-fire products use native Low/Nominal/High confidence classes at 375 m. "
-    "SERPRO maps Nominal to Moderate for operational display. High-confidence detections trigger field follow-up alerts; they are not treated as confirmed ground fires."
+    "SERPRO maps Nominal to Moderate for operational display. High-confidence detections trigger field follow-up alerts; they are not treated as confirmed ground fires. "
+    "Burned-area history is derived separately from MODIS MCD64A1 v6.1."
 )
