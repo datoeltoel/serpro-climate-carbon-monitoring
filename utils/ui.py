@@ -5,12 +5,36 @@ def setup_page():
     st.set_page_config(page_title="SERPRO Climate & Carbon Monitoring", page_icon="🌿", layout="wide", initial_sidebar_state="expanded")
     st.markdown("""
     <style>
-    .block-container {padding-top: 1.2rem; padding-bottom: 2rem; max-width: 1500px;}
+    .block-container {padding-top: 2.2rem; padding-bottom: 2rem; max-width: 1500px;}
     [data-testid="stSidebar"] {background: #09231A;}
     [data-testid="stSidebar"] * {color: #F4F7F5;}
-    .brand {font-size: 1.55rem; font-weight: 700; color: #0B5D3B;}
-    .subtitle {color: #66756E; margin-top: -0.6rem; margin-bottom: 1rem;}
-    .status {font-size: 0.82rem; color: #4E665B; text-align: right;}
+
+    /* Brand / header: prevent clipping at the top of the viewport */
+    .brand {
+        display:block;
+        width:100%;
+        overflow:visible !important;
+        position:relative;
+        z-index:2;
+        font-size:1.55rem;
+        line-height:1.35;
+        font-weight:700;
+        color:#0B5D3B;
+        margin:0 0 2px 0;
+        padding:0;
+    }
+    .subtitle {
+        display:block;
+        width:100%;
+        overflow:visible !important;
+        font-size:.92rem;
+        line-height:1.45;
+        color:#66756E;
+        margin:0 0 1rem 0;
+        padding:0;
+    }
+    .status {font-size:0.82rem; line-height:1.4; color:#4E665B; text-align:right; margin-bottom:8px;}
+
     .metric-card {background:#FFFFFF; border:1px solid #E4EAE7; border-radius:14px; padding:16px 18px; min-height:105px; box-shadow:0 1px 3px rgba(0,0,0,.04);}
     .metric-label {font-size:.78rem; color:#66756E; text-transform:uppercase; letter-spacing:.04em;}
     .metric-value {font-size:1.7rem; font-weight:700; color:#12382A; margin-top:5px;}
@@ -53,6 +77,9 @@ def setup_page():
     .alert-medium {border-left:5px solid #F9A825; background:#FFFCF2; padding:9px 12px; border-radius:6px; margin:5px 0;}
     .alert-low {border-left:5px solid #4C8BF5; background:#F5F9FF; padding:9px 12px; border-radius:6px; margin:5px 0;}
     @media (max-width: 800px) {
+      .block-container {padding-top:1.5rem;}
+      .brand {font-size:1.25rem; line-height:1.35;}
+      .subtitle {font-size:.84rem;}
       .landscape-grid {grid-template-columns:1fr; gap:8px;}
       .landscape-connector {font-size:1.5rem;}
       .landscape-connector span {display:inline; margin-left:6px;}
