@@ -1,4 +1,4 @@
-# SERPRO Climate & Carbon Monitoring
+# SERPRO Climate & Carbon Monitoring [PROTOTYPE - JUST FOR PORTFOLIO]
 
 Climate intelligence and spatial monitoring platform for the **Seruyan Restoration Ecosystem Project (SERPRO)** by PT Kalamanthana Alam Lestari.
 
