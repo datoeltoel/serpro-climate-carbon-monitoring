@@ -1,0 +1,38 @@
+name: Build Climate Risk
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build Rainfall Anomaly", "Build SPI-3 and SPI-6"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+jobs:
+  risk:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build climate risk
+        run: python scripts/build_climate_risk.py
+
+      - name: Commit risk data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/processed/climate/risk/climate_risk.csv \
+            data/processed/climate/risk/climate_risk_metadata.json
+          git diff --cached --quiet || git commit -m "data: update climate risk"
+          git push
