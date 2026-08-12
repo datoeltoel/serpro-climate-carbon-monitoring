@@ -1,0 +1,24 @@
+{
+  "project": "Seruyan Restoration Ecosystem Project (SERPRO)",
+  "project_owner": "PT Kalamanthana Alam Lestari",
+  "layers": {
+    "serpro_project_area": {
+      "display_name": "SERPRO Project Area (Concession)",
+      "source_file": "KAL_Boundary_Split.kml",
+      "source_type": "KML",
+      "crs": "EPSG:4326",
+      "feature_count": 6,
+      "area_ha_source_metadata": 31685.385,
+      "role": "All PT Kalamanthana Alam Lestari concession/project area."
+    },
+    "serpro_carbon_project_zone": {
+      "display_name": "SERPRO Carbon Project Zone",
+      "source_file": "ProjectZone.kmz",
+      "source_type": "KMZ",
+      "crs": "EPSG:4326",
+      "feature_count": 1,
+      "role": "Carbon project boundary supplied for the SERPRO carbon project."
+    }
+  },
+  "webgis_note": "Web layers are generalized for public map rendering; source geometries remain represented by their source metadata."
+}
