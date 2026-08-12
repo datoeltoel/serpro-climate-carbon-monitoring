@@ -39,13 +39,13 @@ if scoped_all.empty:
 min_date = scoped_all["date"].min().date()
 max_date = scoped_all["date"].max().date()
 
-st.markdown("### 📅 Monitoring Date Range")
-d1, d2, d3 = st.columns([1, 1, 1])
-with d1:
+st.markdown("### 📅 Monitoring Date Filter")
+f1, f2, f3 = st.columns([1, 1, 1])
+with f1:
     start_date = st.date_input("Start date", value=min_date, min_value=min_date, max_value=max_date)
-with d2:
+with f2:
     end_date = st.date_input("End date", value=max_date, min_value=min_date, max_value=max_date)
-with d3:
+with f3:
     preset = st.selectbox("Quick range", ["Custom", "Latest 24H", "Latest 7D", "Latest 30D"])
 
 if preset != "Custom":
@@ -65,6 +65,7 @@ scoped = scoped_all[
 selected_latest = scoped["date"].max() if not scoped.empty else pd.Timestamp(end_date)
 last24 = scoped[scoped["date"] >= selected_latest - pd.Timedelta(days=1)]
 last7 = scoped[scoped["date"] >= selected_latest - pd.Timedelta(days=6)]
+last30 = scoped[scoped["date"] >= selected_latest - pd.Timedelta(days=29)]
 
 low7 = int((last7["confidence"] == 0).sum())
 moderate7 = int((last7["confidence"] == 1).sum())
@@ -115,6 +116,7 @@ else:
                 f"{a['latitude']:.5f}, {a['longitude']:.5f} · {a['source']}"
             )
 
+# Map filtered to selected date range.
 m = folium.Map(location=[-3.10, 112.62], zoom_start=9, tiles="CartoDB positron", control_scale=True)
 zone = load_carbon_project_zone()
 area = load_project_area()
@@ -207,7 +209,11 @@ show = show.rename(columns={
     "brightness_ti4_k": "TI4 (K)",
     "brightness_ti5_k": "TI5 (K)",
     "source": "Source",
-})[["Date", "Latitude", "Longitude", "TI4 (K)", "TI5 (K)", "Confidence", "Source"]]
+})
+for col in ["TI4 (K)", "TI5 (K)"]:
+    if col not in show.columns:
+        show[col] = None
+show = show[["Date", "Latitude", "Longitude", "TI4 (K)", "TI5 (K)", "Confidence", "Source"]]
 st.dataframe(show.head(200), use_container_width=True, hide_index=True)
 
 st.caption(
