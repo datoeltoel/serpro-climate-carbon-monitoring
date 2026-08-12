@@ -1,13 +1,16 @@
 {
-  "baseline_source": "CHIRPS v2 Final",
+  "historical_source": "CHIRPS v2 Final",
   "baseline_period": "1991-2020",
-  "current_source": "GPM IMERG V07",
-  "status_method": "monthly rainfall anomaly percent against CHIRPS 1991-2020 mean",
+  "current_source": "NASA GPM IMERG V07",
+  "daily_comparison": "same calendar month-day",
+  "status_basis": "30-day rainfall anomaly percent when 30 current observations are available",
   "status_thresholds_pct": {
     "very_wet": ">= +50%",
     "wet": "+20% to < +50%",
     "normal": "> -20% to < +20%",
     "dry": "-50% to <= -20%",
-    "drought": "<= -50%"
-  }
+    "drought": "<= -50%",
+    "insufficient_data": "fewer than 30 current daily observations"
+  },
+  "records": 60
 }
