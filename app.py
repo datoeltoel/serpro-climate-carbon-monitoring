@@ -1,9 +1,14 @@
 import streamlit as st
 from streamlit_folium import st_folium
+import pandas as pd
+
 from utils.demo_data import load_demo_data
 from utils.scope_engine import get_scope, scope_options, SPATIAL_RELATIONSHIP
 from utils.ui import setup_page
 from utils.map import load_carbon_project_zone, load_project_area, render_map
+from utils.climate.fire import load_fire
+from utils.climate.anomaly import load_anomaly
+from utils.climate.vegetation import load_ndmi
 
 setup_page()
 data = load_demo_data()
@@ -12,7 +17,6 @@ st.markdown('<div class="brand">🌿 SERPRO Climate & Carbon Monitoring <span cl
 st.markdown('<div class="subtitle">Seruyan Restoration Ecosystem Project (SERPRO) · PT Kalamanthana Alam Lestari</div>', unsafe_allow_html=True)
 st.markdown('<div class="status">● Prototype · Official project boundaries loaded · Live climate/fire modules connected incrementally</div>', unsafe_allow_html=True)
 
-# Official boundary context
 project_area = load_project_area()
 project_zone = load_carbon_project_zone()
 project_area_scope = get_scope("SERPRO Project Area")
@@ -137,10 +141,99 @@ with c2:
 with c3:
     st.plotly_chart(data["ndvi_chart"], use_container_width=True, config={"displayModeBar": False})
 
-st.markdown('<div class="section-title">Recent Alerts</div>', unsafe_allow_html=True)
-for _, alert in data["alerts"].iterrows():
-    priority = alert["Priority"]
-    cls = "alert-high" if priority == "HIGH" else "alert-medium" if priority == "MEDIUM" else "alert-low"
-    st.markdown(f'<div class="{cls}"><b>{alert["Type"]}</b> · {alert["Location"]} · {alert["Date"]} · <b>{priority}</b></div>', unsafe_allow_html=True)
+# Live alerts only — no demo/sample alerts.
+st.markdown('<div class="section-title">🚨 Recent Alerts</div>', unsafe_allow_html=True)
+alerts_live = []
 
-st.caption("Prototype status: this interface is an evolving monitoring prototype. Live climate and fire modules are being connected incrementally; demo indicators on this landing page should not be interpreted as operational carbon-accounting outputs.")
+try:
+    fire = load_fire()
+    if not fire.empty:
+        fire_latest = fire[fire["date"] == fire["date"].max()].copy()
+        fire_latest = fire_latest[fire_latest["confidence"] == 2]
+        for _, row in fire_latest.sort_values("date", ascending=False).head(5).iterrows():
+            scope_label = {
+                "project_area": "SERPRO Project Area",
+                "carbon_project_zone": "SERPRO Carbon Project Zone",
+            }.get(str(row.get("scope")), str(row.get("scope", "SERPRO")))
+            priority = "HIGH" if row.get("scope") == "project_area" else "MODERATE"
+            action = "FIELD ALERT" if priority == "HIGH" else "VERIFY"
+            alerts_live.append({
+                "type": "🔥 High-confidence hotspot",
+                "location": scope_label,
+                "date": pd.to_datetime(row["date"]).strftime("%d %b %Y"),
+                "level": priority,
+                "action": action,
+                "detail": f"VIIRS · {float(row['latitude']):.4f}, {float(row['longitude']):.4f}",
+            })
+except Exception:
+    pass
+
+try:
+    anom = load_anomaly()
+    if not anom.empty and "anomaly_30d_pct" in anom.columns:
+        anom = anom.copy()
+        anom["date"] = pd.to_datetime(anom["date"], errors="coerce")
+        latest_anom_date = anom["date"].max()
+        for _, row in anom[anom["date"] == latest_anom_date].iterrows():
+            value = row.get("anomaly_30d_pct")
+            if pd.notna(value) and float(value) <= -30:
+                scope_label = {"project_area": "SERPRO Project Area", "carbon_project_zone": "SERPRO Carbon Project Zone"}.get(str(row.get("scope")), str(row.get("scope", "SERPRO")))
+                alerts_live.append({
+                    "type": "🌧 Rainfall anomaly",
+                    "location": scope_label,
+                    "date": latest_anom_date.strftime("%d %b %Y"),
+                    "level": "MODERATE",
+                    "action": "REVIEW",
+                    "detail": f"30-day anomaly {float(value):+.1f}%",
+                })
+except Exception:
+    pass
+
+try:
+    ndmi = load_ndmi()
+    if not ndmi.empty and "ndmi" in ndmi.columns:
+        ndmi = ndmi.copy()
+        ndmi["date"] = pd.to_datetime(ndmi["date"], errors="coerce")
+        for scope_key, group in ndmi.groupby("scope"):
+            group = group.sort_values("date")
+            if len(group) < 2:
+                continue
+            latest = group.iloc[-1]
+            prev = group.iloc[-2]
+            change = float(latest["ndmi"]) - float(prev["ndmi"])
+            if change <= -0.08:
+                scope_label = {"project_area": "SERPRO Project Area", "carbon_project_zone": "SERPRO Carbon Project Zone"}.get(str(scope_key), str(scope_key))
+                alerts_live.append({
+                    "type": "🌿 NDMI decline",
+                    "location": scope_label,
+                    "date": pd.to_datetime(latest["date"]).strftime("%d %b %Y"),
+                    "level": "MODERATE",
+                    "action": "REVIEW",
+                    "detail": f"NDMI change {change:+.3f}",
+                })
+except Exception:
+    pass
+
+if not alerts_live:
+    st.success("No active live alerts in the connected monitoring modules for the latest available observations.")
+else:
+    level_styles = {
+        "HIGH": ("#D32F2F", "#FFF6F6"),
+        "MODERATE": ("#F9A825", "#FFFCF2"),
+        "LOW": ("#4C8BF5", "#F5F9FF"),
+    }
+    for alert in alerts_live[:8]:
+        accent, bg = level_styles.get(alert["level"], ("#4C8BF5", "#F5F9FF"))
+        st.markdown(
+            f"""
+            <div style="border-left:5px solid {accent};background:{bg};padding:12px 14px;border-radius:8px;margin:7px 0;">
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+                <div><b>{alert['type']}</b><br><span style="font-size:.82rem;color:#5F6D67;">{alert['location']} · {alert['date']} · {alert['detail']}</span></div>
+                <div style="white-space:nowrap;text-align:right;"><b style="color:{accent};">{alert['level']}</b><br><span style="font-size:.74rem;color:#65736D;">→ {alert['action']}</span></div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+st.caption("Prototype status: Recent Alerts are generated only from connected live monitoring outputs. Demo/sample alerts are intentionally excluded from this landing page. Alerts are screening indicators and require appropriate field verification before operational decisions.")
