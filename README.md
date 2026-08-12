@@ -1,7 +1,8 @@
 # SERPRO Climate & Carbon Monitoring 
 
 Climate intelligence and spatial monitoring platform for the **Seruyan Restoration Ecosystem Project (SERPRO)** by PT Kalamanthana Alam Lestari.
-** Disclimer, this website is just for portfolio @2026 | Ziyadatul Hikmah
+
+** This website is just for portfolio @2026 | Ziyadatul Hikmah **
 
 ## Boundary and scope model
 
