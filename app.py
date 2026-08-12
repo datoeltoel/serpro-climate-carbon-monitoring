@@ -1,6 +1,7 @@
 import streamlit as st
 from streamlit_folium import st_folium
 from utils.demo_data import load_demo_data
+from utils.scope_engine import get_scope, scope_options, SPATIAL_RELATIONSHIP, containment_percent
 from utils.ui import setup_page
 from utils.map import load_carbon_project_zone, load_project_area, render_map
 
@@ -14,41 +15,34 @@ st.markdown('<div class="status">● Demo analytics · Official project boundari
 # Official boundary context
 project_area = load_project_area()
 project_zone = load_carbon_project_zone()
-project_area_ha = 31_685.38489
-project_zone_area_ha = 150_142.5436
-
-# Verified spatial relationship supplied from project GIS analysis.
-intersection_ha = 31_685.38491
-union_ha = 150_142.543553
-project_area_within_zone_pct = 100.0000000631
-project_zone_covered_by_project_area_pct = 21.1035354472
-project_area_only_ha = 0.00002
-carbon_zone_only_ha = 118_457.15869
+project_area_ha = get_scope("SERPRO Project Area").area_ha
+project_zone_area_ha = get_scope("SERPRO Carbon Project Zone").area_ha
 
 st.markdown('<div class="section-title">Project Landscape Summary</div>', unsafe_allow_html=True)
 st.markdown(
-    """
+    f"""
     <div class="landscape-summary">
       <div class="landscape-intro">
         <b>Unified SERPRO Project Landscape</b><br>
-        SERPRO Project Area and SERPRO Carbon Project Zone are two official spatial boundaries
-        describing the same landscape. Their GIS relationship shows that the Project Area is effectively
-        fully contained within the Carbon Project Zone, within numerical geometry tolerance.
+        The Carbon Project Zone is the primary spatial envelope of the SERPRO landscape, with the Project Area forming a contained sub-area.
       </div>
       <div class="landscape-grid">
-        <div class="landscape-card area-card">
-          <div class="landscape-icon">🟢</div>
-          <div class="landscape-label">SERPRO Project Area</div>
-          <div class="landscape-value">31,685.38 ha</div>
-          <div class="landscape-meta">PT KAL concession / project area · KAL_Boundary_Split.kml</div>
-        </div>
-        <div class="landscape-connector">↔<span>OVERLAPPING<br>LANDSCAPE</span></div>
         <div class="landscape-card zone-card">
           <div class="landscape-icon">🟣</div>
           <div class="landscape-label">SERPRO Carbon Project Zone</div>
-          <div class="landscape-value">150,142.54 ha</div>
-          <div class="landscape-meta">Carbon project boundary · ProjectZone.kmz</div>
+          <div class="landscape-value">{project_zone_area_ha:,.2f} ha</div>
+          <div class="landscape-meta">Primary project-zone envelope · ProjectZone.kmz</div>
         </div>
+        <div class="landscape-connector">↓<span>CONTAINS</span></div>
+        <div class="landscape-card area-card">
+          <div class="landscape-icon">🟢</div>
+          <div class="landscape-label">SERPRO Project Area</div>
+          <div class="landscape-value">{project_area_ha:,.2f} ha</div>
+          <div class="landscape-meta">PT KAL concession / project area · KAL_Boundary_Split.kml</div>
+        </div>
+      </div>
+      <div class="landscape-note">
+        Spatial analysis confirms the Project Area is effectively fully contained within the Carbon Project Zone.
       </div>
     </div>
     """,
@@ -65,66 +59,75 @@ with summary_map_col:
         key="project_landscape_summary_map",
     )
 with summary_info_col:
+    containment = min(100.0, SPATIAL_RELATIONSHIP["intersection_as_percent_of_project_area"])
+    zone_share = SPATIAL_RELATIONSHIP["project_area_as_percent_of_carbon_zone"]
     st.markdown(
         f"""
-        <div class="relationship-card">
-          <div class="relationship-title">PROJECT SPATIAL RELATIONSHIP</div>
-          <div class="relationship-hero">≈100%</div>
-          <div class="relationship-sub">PROJECT AREA WITHIN CARBON ZONE</div>
+        <div class="risk-card">
+          <div><b>SPATIAL RELATIONSHIP</b></div>
+          <div class="risk-number">≈{containment:.0f}%</div>
+          <div class="risk-label">PROJECT AREA WITHIN CARBON ZONE</div>
           <hr>
-          <div class="relationship-row"><span>Intersection</span><b>{intersection_ha:,.5f} ha</b></div>
-          <div class="relationship-row"><span>Union</span><b>{union_ha:,.6f} ha</b></div>
-          <div class="relationship-row"><span>Project Area</span><b>{project_area_ha:,.5f} ha</b></div>
-          <div class="relationship-row"><span>Carbon Zone</span><b>{project_zone_area_ha:,.5f} ha</b></div>
-          <div class="relationship-divider"></div>
-          <div class="relationship-row"><span>Project Area → Zone</span><b>{project_area_within_zone_pct:.2f}%</b></div>
-          <div class="relationship-row"><span>Zone represented by Project Area</span><b>{project_zone_covered_by_project_area_pct:.2f}%</b></div>
-          <div class="relationship-note">
-            Project Area only: {project_area_only_ha:.5f} ha residual.<br>
-            Carbon Zone only: {carbon_zone_only_ha:,.5f} ha.
-          </div>
-          <div class="relationship-footnote">
-            Floating-point residuals are treated as numerical geometry tolerance and are not interpreted as meaningful land area.
+          <p><b>Intersection</b><br>{SPATIAL_RELATIONSHIP['intersection_area_ha']:,.5f} ha</p>
+          <p><b>Union</b><br>{SPATIAL_RELATIONSHIP['union_area_ha']:,.6f} ha</p>
+          <p><b>Project Area share of Carbon Zone</b><br>{zone_share:.2f}%</p>
+          <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,.09);font-size:.82rem;line-height:1.45;">
+            Floating-point residuals below practical mapping precision are treated as geometry tolerance, not meaningful land area.
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-st.markdown('<div class="section-title">Monitoring Scope</div>', unsafe_allow_html=True)
-scope = st.radio(
-    "Select analysis scope",
-    ["All Boundaries", "SERPRO Project Area", "Carbon Project Zone"],
-    horizontal=True,
-    label_visibility="collapsed",
+st.markdown('<div class="section-title">Scope Engine</div>', unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class="scope-engine">
+      <div class="scope-node root"><b>SERPRO Project Landscape</b><span>Unified monitoring envelope</span></div>
+      <div class="scope-line">↓</div>
+      <div class="scope-node zone"><b>SERPRO Carbon Project Zone</b><span>Primary project-zone scope</span></div>
+      <div class="scope-line">↓</div>
+      <div class="scope-node area"><b>SERPRO Project Area</b><span>Contained concession / project-area subset</span></div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
-scope_label = {
-    "All Boundaries": "Unified SERPRO project landscape",
-    "SERPRO Project Area": "SERPRO concession / project area",
-    "Carbon Project Zone": "SERPRO carbon project zone",
-}[scope]
+scope = st.selectbox(
+    "Select monitoring scope",
+    scope_options(),
+    index=1,
+    format_func=lambda x: {
+        "SERPRO Project Landscape": "🌐 SERPRO Project Landscape",
+        "SERPRO Carbon Project Zone": "🟣 Carbon Project Zone",
+        "SERPRO Project Area": "🟢 Project Area",
+    }[x],
+)
+selected_scope = get_scope(scope)
+
+st.caption(
+    f"Active scope: **{selected_scope.name}** · Area: **{selected_scope.area_ha:,.2f} ha** · {selected_scope.description}"
+)
 
 cols = st.columns(6)
 metrics = [
-    ("🗺️ Project Area", f"{project_area_ha:,.0f} ha", "official KML · 6 blocks"),
+    ("🗺️ Landscape", f"{project_zone_area_ha:,.0f} ha", "Carbon Zone envelope"),
     ("🟣 Carbon Zone", f"{project_zone_area_ha:,.0f} ha", "official ProjectZone area"),
-    ("🔥 Hotspots", "17", "+6 vs previous 7D"),
-    ("🌿 NDVI", "0.71", "+4.3% vs 7 days"),
+    ("🟢 Project Area", f"{project_area_ha:,.0f} ha", f"{zone_share:.2f}% of Carbon Zone"),
     ("🌧 Rainfall", "245 mm", "+18% vs normal"),
+    ("🔥 Hotspots", "17", "+6 vs previous 7D"),
     ("🟣 Carbon Risk", "68 / 100", "HIGH RISK"),
 ]
 for col, (label, value, delta) in zip(cols, metrics):
     with col:
         st.markdown(f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="metric-delta">{delta}</div></div>', unsafe_allow_html=True)
 
-st.caption(f"Active scope: **{scope_label}** · Project Area: **{project_area_ha:,.2f} ha** · Carbon Project Zone: **{project_zone_area_ha:,.2f} ha**")
-
 st.markdown('<div class="section-title">Project WebGIS & Climate Risk</div>', unsafe_allow_html=True)
 map_col, risk_col = st.columns([2.1, 1])
 with map_col:
+    focus = "All Boundaries" if scope == "SERPRO Project Landscape" else scope
     st_folium(
-        render_map(data["hotspots"], data["monitoring_points"], focus=scope),
+        render_map(data["hotspots"], data["monitoring_points"], focus=focus),
         width=None,
         height=500,
         returned_objects=[],
@@ -151,4 +154,4 @@ for _, alert in data["alerts"].iterrows():
     cls = "alert-high" if priority == "HIGH" else "alert-medium" if priority == "MEDIUM" else "alert-low"
     st.markdown(f'<div class="{cls}"><b>{alert["Type"]}</b> · {alert["Location"]} · {alert["Date"]} · <b>{priority}</b></div>', unsafe_allow_html=True)
 
-st.caption("Boundary note: SERPRO Project Area uses KAL_Boundary_Split.kml; SERPRO Carbon Project Zone uses ProjectZone.kmz. Verified spatial analysis shows the Project Area is effectively fully contained within the Carbon Project Zone. Monitoring indicators remain demo values until live spatial datasets are connected and filtered by the selected scope.")
+st.caption("Scope note: SERPRO Carbon Project Zone is the primary monitoring envelope; SERPRO Project Area is a contained subset. Monitoring indicators remain demo values until live spatial datasets are connected and filtered by scope.")
