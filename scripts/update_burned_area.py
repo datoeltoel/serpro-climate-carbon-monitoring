@@ -70,26 +70,34 @@ def project_zone_geometry() -> ee.Geometry:
 
 
 def annual_burned_area(image_collection: ee.ImageCollection, geometry: ee.Geometry) -> ee.Number:
-    # BurnDate > 0 identifies burned pixels. QA bit 0 = land and bit 1 = valid data.
+    """Return total burned area in hectares for the supplied year/scope."""
+
     def month_area(img: ee.Image) -> ee.Image:
         burn = img.select("BurnDate")
         qa = img.select("QA")
+        # QA bit 0 = land; bit 1 = valid data.
         land = qa.bitwiseAnd(1).eq(1)
         valid = qa.rightShift(1).bitwiseAnd(1).eq(1)
         burned = burn.gt(0).And(land).And(valid)
-        area_ha = ee.Image.pixelArea().divide(10000).updateMask(burned)
-        return area_ha
+        return (
+            ee.Image.pixelArea()
+            .divide(10000)
+            .updateMask(burned)
+            .rename("burned_area_ha")
+        )
 
     monthly = image_collection.map(month_area)
-    annual = ee.ImageCollection(monthly).sum()
+    annual = monthly.sum()
     result = annual.reduceRegion(
         reducer=ee.Reducer.sum(),
         geometry=geometry,
         scale=SCALE,
         maxPixels=1e10,
         tileScale=4,
-    ).get("BurnDate")
-    return ee.Number(result).defaultValue(0)
+    ).get("burned_area_ha")
+
+    # getInfo() may return None when no burned pixels are present; caller handles it.
+    return ee.Number(result) if result is not None else ee.Number(0)
 
 
 def main() -> None:
@@ -105,16 +113,17 @@ def main() -> None:
         end = f"{year + 1}-01-01"
         collection = ee.ImageCollection(COLLECTION).filterDate(start, end)
         for scope, geometry in scopes.items():
-            area_ha = annual_burned_area(collection, geometry).getInfo()
+            result = annual_burned_area(collection, geometry).getInfo()
+            area_ha = float(result or 0.0)
             rows.append({
                 "year": year,
                 "scope": scope,
-                "burned_area_ha": float(area_ha or 0.0),
+                "burned_area_ha": area_ha,
                 "processing_time_utc": datetime.now(timezone.utc).isoformat(),
                 "source": COLLECTION,
                 "resolution_m": SCALE,
             })
-            print(f"{year} {scope}: {float(area_ha or 0.0):,.2f} ha")
+            print(f"{year} {scope}: {area_ha:,.2f} ha")
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     fields = ["year", "scope", "burned_area_ha", "processing_time_utc", "source", "resolution_m"]
