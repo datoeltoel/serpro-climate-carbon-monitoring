@@ -2,30 +2,62 @@ import streamlit as st
 from streamlit_folium import st_folium
 from utils.demo_data import load_demo_data
 from utils.ui import setup_page
-from utils.map import render_map
+from utils.map import load_carbon_project_zone, load_project_area, render_map
 
 setup_page()
 data = load_demo_data()
 
 st.markdown('<div class="brand">🌿 SERPRO Climate & Carbon Monitoring</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Climate intelligence and spatial monitoring platform — MVP</div>', unsafe_allow_html=True)
-st.markdown('<div class="status">● Demo monitoring data · Official SERPRO boundaries loaded</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Seruyan Restoration Ecosystem Project (SERPRO) · PT Kalamanthana Alam Lestari</div>', unsafe_allow_html=True)
+st.markdown('<div class="status">● Demo analytics · Official project boundaries loaded · Last update: 12 Aug 2026 20:00 WIB</div>', unsafe_allow_html=True)
+
+# Official boundary context
+project_area = load_project_area()
+project_zone = load_carbon_project_zone()
+project_area_ha = 31_685.385
+project_zone_area_ha = None  # Keep unset until source-area validation is finalized.
+
+st.markdown('<div class="section-title">Monitoring Scope</div>', unsafe_allow_html=True)
+scope = st.radio(
+    "Select analysis scope",
+    ["All Boundaries", "SERPRO Project Area", "Carbon Project Zone"],
+    horizontal=True,
+    label_visibility="collapsed",
+)
+
+scope_area = project_area_ha if scope == "SERPRO Project Area" else project_zone_area_ha
+scope_label = {
+    "All Boundaries": "All official boundaries",
+    "SERPRO Project Area": "SERPRO concession / project area",
+    "Carbon Project Zone": "SERPRO carbon project zone",
+}[scope]
 
 cols = st.columns(6)
-metrics = [("🌧 Rainfall", "245 mm", "+18% vs normal"), ("🌡 Temperature", "27.8 °C", "+0.6 °C anomaly"), ("💧 Wetness", "0.72", "+12% vs 7 days"), ("🔥 Hotspots", "17", "+6 vs previous 7D"), ("🌿 NDVI", "0.71", "+4.3% vs 7 days"), ("🟣 Carbon Risk", "68 / 100", "HIGH RISK")]
+metrics = [
+    ("🗺️ Project Area", f"{project_area_ha:,.0f} ha", "official KML · 6 blocks"),
+    ("🟣 Carbon Zone", "Pending", "area validation in progress"),
+    ("🌧 Rainfall", "245 mm", "+18% vs normal"),
+    ("🌡 Temperature", "27.8 °C", "+0.6 °C anomaly"),
+    ("🔥 Hotspots", "17", "+6 vs previous 7D"),
+    ("🟣 Carbon Risk", "68 / 100", "HIGH RISK"),
+]
 for col, (label, value, delta) in zip(cols, metrics):
     with col:
         st.markdown(f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="metric-delta">{delta}</div></div>', unsafe_allow_html=True)
 
+st.caption(f"Active scope: **{scope_label}**")
+
 st.markdown('<div class="section-title">Project WebGIS & Climate Risk</div>', unsafe_allow_html=True)
 map_col, risk_col = st.columns([2.1, 1])
 with map_col:
-    st_folium(render_map(data["hotspots"], data["monitoring_points"]), width=None, height=480, returned_objects=[])
+    st_folium(
+        render_map(data["hotspots"], data["monitoring_points"], focus=scope),
+        width=None,
+        height=500,
+        returned_objects=[],
+    )
 with risk_col:
     st.markdown('<div class="risk-card"><div>CLIMATE RISK INDEX</div><div class="risk-number">68</div><div class="risk-label">HIGH RISK</div><hr>', unsafe_allow_html=True)
-    st.markdown("**Boundary context**")
-    st.markdown("🟢 SERPRO Project Area / Concession")
-    st.markdown("🟣 SERPRO Carbon Project Zone")
     for label, value in data["risk_inputs"].items():
         st.markdown(f"**{label.replace('_', ' ').title()}** — {value:.2f}")
     st.markdown('</div>', unsafe_allow_html=True)
@@ -45,4 +77,4 @@ for _, alert in data["alerts"].iterrows():
     cls = "alert-high" if priority == "HIGH" else "alert-medium" if priority == "MEDIUM" else "alert-low"
     st.markdown(f'<div class="{cls}"><b>{alert["Type"]}</b> · {alert["Location"]} · {alert["Date"]} · <b>{priority}</b></div>', unsafe_allow_html=True)
 
-st.caption("MVP note: monitoring values remain demo data. The WebGIS boundary layers now use the official SERPRO Project Area / concession boundary and SERPRO Carbon Project Zone supplied by PT Kalamanthana Alam Lestari.")
+st.caption("Boundary note: SERPRO Project Area uses KAL_Boundary_Split.kml; SERPRO Carbon Project Zone uses ProjectZone.kmz. Carbon-project metrics should default to the Carbon Project Zone once live data are connected.")
