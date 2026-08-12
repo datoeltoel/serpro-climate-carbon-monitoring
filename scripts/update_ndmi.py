@@ -5,6 +5,7 @@ Outputs scene-level zonal NDMI means for the latest 90 days.
 """
 from __future__ import annotations
 
+import csv
 import gzip
 import json
 import os
@@ -39,6 +40,8 @@ def authenticate_ee() -> None:
         info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
     )
     ee.Initialize(credentials=credentials, project=cloud_project)
+    print(f"Earth Engine initialized with project: {cloud_project}")
+    print(f"Earth Engine service account: {info['client_email']}")
 
 
 def project_area_geometry() -> ee.Geometry:
@@ -67,11 +70,12 @@ def project_zone_geometry() -> ee.Geometry:
 
 
 def add_cloud_mask(img):
-    cloud = ee.Image(img.get("cloud_mask")).select("probability")
-    return img.updateMask(cloud.lt(MAX_CLOUD_PROBABILITY))
+    cloud_obj = img.get("cloud_mask")
+    return ee.Image(img).updateMask(ee.Image(cloud_obj).select("probability").lt(MAX_CLOUD_PROBABILITY))
 
 
 def add_ndmi(img):
+    img = ee.Image(img)
     return img.addBands(img.normalizedDifference(["B8", "B11"]).rename("NDMI"))
 
 
@@ -84,7 +88,9 @@ def build_collection(region: ee.Geometry, start: str, end: str):
         secondary=clouds,
         condition=ee.Filter.equals(leftField="system:index", rightField="system:index"),
     )
-    return ee.ImageCollection(joined).map(add_cloud_mask).map(add_ndmi)
+    # Keep only SR scenes for which a matching cloud-probability image exists.
+    joined = ee.ImageCollection(joined).filter(ee.Filter.notNull(["cloud_mask"]))
+    return joined.map(add_cloud_mask).map(add_ndmi)
 
 
 def zonal_mean(img, geometry):
@@ -106,19 +112,25 @@ def main() -> None:
     }
     end = date.today() + timedelta(days=1)
     start = end - timedelta(days=LOOKBACK_DAYS)
-    # Use the combined scope envelope for efficient scene filtering.
     region = scopes["carbon_project_zone"].union(scopes["project_area"], maxError=1)
-    collection = build_collection(region, start.isoformat(), end.isoformat())
-    images = collection.sort("system:time_start")
-    info = images.map(lambda i: i.set("scene_date", ee.Date(i.get("system:time_start")).format("YYYY-MM-dd"))).toList(images.size()).getInfo()
+    collection = build_collection(region, start.isoformat(), end.isoformat()).sort("system:time_start")
+
+    # Pull stable scene identifiers and timestamps in one server-side evaluation.
+    scene_ids = collection.aggregate_array("system:index").getInfo()
+    scene_times = collection.aggregate_array("system:time_start").getInfo()
+    scene_cloud = collection.aggregate_array("CLOUDY_PIXEL_PERCENTAGE").getInfo()
 
     rows = []
-    for raw in info:
-        scene_id = raw.get("id")
-        # Re-fetch by system:index to keep evaluation straightforward.
+    for idx, scene_id in enumerate(scene_ids):
         img = collection.filter(ee.Filter.eq("system:index", scene_id)).first()
-        scene_date = ee.Date(img.get("system:time_start")).format("YYYY-MM-dd").getInfo()
-        cloudy_pct = img.get("CLOUDY_PIXEL_PERCENTAGE").getInfo()
+        if img is None:
+            continue
+        scene_ms = scene_times[idx] if idx < len(scene_times) else None
+        scene_date = datetime.fromtimestamp(scene_ms / 1000, tz=timezone.utc).date().isoformat() if scene_ms else None
+        cloudy_pct = scene_cloud[idx] if idx < len(scene_cloud) else None
+        if scene_date is None:
+            continue
+
         for scope_name, geometry in scopes.items():
             value = zonal_mean(img, geometry)
             value = value.getInfo() if value is not None else None
@@ -129,6 +141,7 @@ def main() -> None:
                 "scope": scope_name,
                 "ndmi": float(value),
                 "cloudy_pixel_percentage": float(cloudy_pct) if cloudy_pct is not None else None,
+                "scene_id": scene_id,
                 "source": S2,
                 "processing_time_utc": datetime.now(timezone.utc).isoformat(),
             })
@@ -138,7 +151,6 @@ def main() -> None:
 
     rows.sort(key=lambda r: (r["date"], r["scope"]))
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    import csv
     with OUTPUT.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
