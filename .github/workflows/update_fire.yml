@@ -1,0 +1,50 @@
+name: Update SERPRO Fire Monitoring
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "40 3 * * *" # 10:40 WIB daily
+
+permissions:
+  contents: write
+
+concurrency:
+  group: serpro-fire-update
+  cancel-in-progress: false
+
+jobs:
+  fire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Update Fire Monitoring
+        env:
+          EE_SERVICE_ACCOUNT_JSON: ${{ secrets.EE_SERVICE_ACCOUNT_JSON }}
+          EE_PROJECT_ID: ${{ secrets.EE_PROJECT_ID }}
+        run: python scripts/update_fire.py
+
+      - name: Commit fire data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/processed/climate/fire/fire_hotspots.csv
+          if git diff --cached --quiet; then
+            echo "No fire data changes."
+            exit 0
+          fi
+          git commit -m "data: update SERPRO fire hotspots"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
