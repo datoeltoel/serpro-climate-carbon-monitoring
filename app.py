@@ -17,6 +17,37 @@ project_zone = load_carbon_project_zone()
 project_area_ha = 31_685.385
 project_zone_area_ha = 150_142.54
 
+st.markdown('<div class="section-title">Project Landscape Summary</div>', unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class="landscape-summary">
+      <div class="landscape-intro">
+        <b>Unified SERPRO project landscape</b><br>
+        SERPRO Project Area and SERPRO Carbon Project Zone are two official spatial boundaries
+        describing the same project landscape. They are shown together to preserve their spatial relationship;
+        they are not treated as separate projects.
+      </div>
+      <div class="landscape-grid">
+        <div class="landscape-card area-card">
+          <div class="landscape-icon">🟢</div>
+          <div class="landscape-label">SERPRO Project Area</div>
+          <div class="landscape-value">31,685.39 ha</div>
+          <div class="landscape-meta">PT KAL concession / project area · KAL_Boundary_Split.kml</div>
+        </div>
+        <div class="landscape-connector">↔<span>SPATIALLY<br>OVERLAPPING</span></div>
+        <div class="landscape-card zone-card">
+          <div class="landscape-icon">🟣</div>
+          <div class="landscape-label">SERPRO Carbon Project Zone</div>
+          <div class="landscape-value">150,142.54 ha</div>
+          <div class="landscape-meta">Carbon project boundary · ProjectZone.kmz</div>
+        </div>
+      </div>
+      <div class="landscape-note">Official areas are supplied project values. Spatial overlay is shown on the WebGIS; no overlap percentage is inferred from the two area figures.</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.markdown('<div class="section-title">Monitoring Scope</div>', unsafe_allow_html=True)
 scope = st.radio(
     "Select analysis scope",
