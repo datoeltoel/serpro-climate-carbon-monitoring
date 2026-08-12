@@ -17,8 +17,11 @@
       "source_type": "KMZ",
       "crs": "EPSG:4326",
       "feature_count": 1,
+      "area_ha_source_metadata": 150142.54,
+      "area_ha_display": "150.142,54",
+      "area_basis": "Official project-zone area supplied by project owner",
       "role": "Carbon project boundary supplied for the SERPRO carbon project."
     }
   },
-  "webgis_note": "Web layers are generalized for public map rendering; source geometries remain represented by their source metadata."
+  "webgis_note": "Web layers are generalized for public map rendering; source geometries remain represented by their source metadata. Area for the Carbon Project Zone is the official project-zone area supplied by the project owner and is not inferred from the generalized web geometry."
 }
