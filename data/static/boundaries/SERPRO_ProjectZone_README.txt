@@ -1,1 +1,0 @@
-Canonical source: ProjectZone.kmz uploaded by project team. This source defines the SERPRO Carbon Project Zone and is distinct from KAL_Boundary_Split.kml (PT KAL concession/project area).
