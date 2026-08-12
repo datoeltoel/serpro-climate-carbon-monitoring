@@ -1,0 +1,21 @@
+{
+  "historical_source": "CHIRPS v2 Final",
+  "historical_period": "1981-2025",
+  "current_source": "NASA GPM IMERG V07",
+  "indices": [
+    "SPI-3",
+    "SPI-6"
+  ],
+  "current_rule": "SPI is reported only when enough current monthly observations exist for the requested accumulation window.",
+  "classification": {
+    "extremely_wet": ">= 2.0",
+    "very_wet": "1.5 to < 2.0",
+    "wet": "1.0 to < 1.5",
+    "normal": "> -1.0 to < 1.0",
+    "moderate_dry": "-1.5 to <= -1.0",
+    "severe_drought": "-2.0 to <= -1.5",
+    "extreme_drought": "<= -2.0"
+  },
+  "current_records": 8,
+  "historical_records": 2146
+}
