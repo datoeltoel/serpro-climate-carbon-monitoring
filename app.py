@@ -15,7 +15,7 @@ st.markdown('<div class="status">● Demo analytics · Official project boundari
 project_area = load_project_area()
 project_zone = load_carbon_project_zone()
 project_area_ha = 31_685.385
-project_zone_area_ha = None  # Keep unset until source-area validation is finalized.
+project_zone_area_ha = 150_142.54
 
 st.markdown('<div class="section-title">Monitoring Scope</div>', unsafe_allow_html=True)
 scope = st.radio(
@@ -25,17 +25,18 @@ scope = st.radio(
     label_visibility="collapsed",
 )
 
-scope_area = project_area_ha if scope == "SERPRO Project Area" else project_zone_area_ha
 scope_label = {
     "All Boundaries": "All official boundaries",
     "SERPRO Project Area": "SERPRO concession / project area",
     "Carbon Project Zone": "SERPRO carbon project zone",
 }[scope]
 
+# Boundary areas are official supplied values. Live indicators remain demo values until
+# source-specific datasets are connected and spatially filtered by the selected scope.
 cols = st.columns(6)
 metrics = [
     ("🗺️ Project Area", f"{project_area_ha:,.0f} ha", "official KML · 6 blocks"),
-    ("🟣 Carbon Zone", "Pending", "area validation in progress"),
+    ("🟣 Carbon Zone", f"{project_zone_area_ha:,.0f} ha", "official ProjectZone area"),
     ("🌧 Rainfall", "245 mm", "+18% vs normal"),
     ("🌡 Temperature", "27.8 °C", "+0.6 °C anomaly"),
     ("🔥 Hotspots", "17", "+6 vs previous 7D"),
@@ -45,7 +46,7 @@ for col, (label, value, delta) in zip(cols, metrics):
     with col:
         st.markdown(f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="metric-delta">{delta}</div></div>', unsafe_allow_html=True)
 
-st.caption(f"Active scope: **{scope_label}**")
+st.caption(f"Active scope: **{scope_label}** · Carbon Project Zone area: **{project_zone_area_ha:,.2f} ha**")
 
 st.markdown('<div class="section-title">Project WebGIS & Climate Risk</div>', unsafe_allow_html=True)
 map_col, risk_col = st.columns([2.1, 1])
@@ -77,4 +78,4 @@ for _, alert in data["alerts"].iterrows():
     cls = "alert-high" if priority == "HIGH" else "alert-medium" if priority == "MEDIUM" else "alert-low"
     st.markdown(f'<div class="{cls}"><b>{alert["Type"]}</b> · {alert["Location"]} · {alert["Date"]} · <b>{priority}</b></div>', unsafe_allow_html=True)
 
-st.caption("Boundary note: SERPRO Project Area uses KAL_Boundary_Split.kml; SERPRO Carbon Project Zone uses ProjectZone.kmz. Carbon-project metrics should default to the Carbon Project Zone once live data are connected.")
+st.caption("Boundary note: SERPRO Project Area uses KAL_Boundary_Split.kml; SERPRO Carbon Project Zone uses ProjectZone.kmz. Boundary areas are official project inputs. Monitoring indicators remain demo values until live spatial datasets are connected and filtered by the selected scope.")
