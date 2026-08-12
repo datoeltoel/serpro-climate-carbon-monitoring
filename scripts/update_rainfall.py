@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import ee
+from google.oauth2 import service_account
 
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 PROJECT_AREA_KML = Path("data/static/project_boundary.kml.gz")
@@ -23,7 +24,7 @@ COLLECTION = "UCSB-CHC/CHIRPS/V3/DAILY_SAT"
 
 
 def authenticate_ee() -> None:
-    """Authenticate Earth Engine for unattended GitHub Actions execution."""
+    """Authenticate Earth Engine using a service-account JSON secret."""
     key_json = os.environ.get("EE_SERVICE_ACCOUNT_JSON")
     cloud_project = os.environ.get("EE_PROJECT_ID")
     if not key_json or not cloud_project:
@@ -32,21 +33,26 @@ def authenticate_ee() -> None:
     try:
         info = json.loads(key_json)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON is not valid JSON. Paste the complete Google service-account JSON file.") from exc
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON is not valid JSON.") from exc
 
-    client_email = info.get("client_email")
-    private_key = info.get("private_key")
-    if not client_email or not private_key:
-        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON must contain client_email and private_key.")
+    required = ("type", "project_id", "private_key", "client_email", "token_uri")
+    missing = [field for field in required if not info.get(field)]
+    if missing:
+        raise RuntimeError(
+            "EE_SERVICE_ACCOUNT_JSON is missing required fields: " + ", ".join(missing)
+        )
+
+    private_key = info["private_key"]
     if "BEGIN PRIVATE KEY" not in private_key or "END PRIVATE KEY" not in private_key:
-        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON does not contain a valid PEM private key. Use the JSON file downloaded from Google Cloud, not a template.")
-    if "..." in private_key:
-        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON appears to contain placeholder text (...) instead of the real private key. Replace it with the original downloaded JSON key.")
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON does not contain a valid private key block.")
 
-    # Earth Engine expects the service-account email and the private-key material,
-    # not the entire JSON document as key_data.
-    credentials = ee.ServiceAccountCredentials(client_email, key_data=private_key)
-    ee.Initialize(credentials, project=cloud_project)
+    credentials = service_account.Credentials.from_service_account_info(
+        info,
+        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+    )
+    ee.Initialize(credentials=credentials, project=cloud_project)
+    print(f"Earth Engine initialized with project: {cloud_project}")
+    print(f"Earth Engine service account: {info['client_email']}")
 
 
 def project_area_geometry() -> ee.Geometry:
@@ -62,7 +68,7 @@ def project_area_geometry() -> ee.Geometry:
         if len(coords) >= 4:
             polygons.append(ee.Geometry.Polygon(coords))
     if not polygons:
-        raise RuntimeError("No valid polygons found in Project Area KML.")
+        raise RuntimeError("No polygons found in SERPRO Project Area KML.")
     return ee.Geometry.MultiPolygon(polygons) if len(polygons) > 1 else polygons[0]
 
 
@@ -70,7 +76,7 @@ def project_zone_geometry() -> ee.Geometry:
     obj = json.loads(PROJECT_ZONE_GEOJSON.read_text(encoding="utf-8"))
     features = obj.get("features", [])
     if not features:
-        raise RuntimeError("Carbon Project Zone GeoJSON contains no features.")
+        raise RuntimeError("No features found in SERPRO Carbon Project Zone GeoJSON.")
     return ee.Geometry(features[0]["geometry"])
 
 
@@ -92,17 +98,8 @@ def fetch_day(date_value, scopes):
     collection = ee.ImageCollection(COLLECTION).filterDate(start, end).select("precipitation")
     count = collection.size().getInfo()
     if count == 0:
-        return [
-            {
-                "date": date_value.strftime("%Y-%m-%d"),
-                "scope": scope_name,
-                "rainfall_mm": "",
-                "source": COLLECTION,
-                "processing_time_utc": datetime.now(timezone.utc).isoformat(),
-                "status": "no_data",
-            }
-            for scope_name in scopes
-        ]
+        print(f"No CHIRPS image available for {date_value}; skipping.")
+        return []
 
     image = ee.Image(collection.mean())
     rows = []
@@ -113,7 +110,6 @@ def fetch_day(date_value, scopes):
             "rainfall_mm": zonal_mean(image, geometry),
             "source": COLLECTION,
             "processing_time_utc": datetime.now(timezone.utc).isoformat(),
-            "status": "ok",
         })
     return rows
 
@@ -129,6 +125,12 @@ def main() -> None:
     rows = []
     for date_value in dates:
         rows.extend(fetch_day(date_value, scopes))
+
+    if not rows:
+        raise RuntimeError(
+            "No CHIRPS rainfall observations were available for the requested period. "
+            "Check CHIRPS collection availability and Earth Engine access."
+        )
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT.open("w", newline="", encoding="utf-8") as fh:
