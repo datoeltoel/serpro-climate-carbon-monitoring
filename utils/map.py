@@ -31,10 +31,7 @@ def load_project_area(path=PROJECT_AREA_SOURCE):
             if len(coords) >= 4:
                 features.append({
                     "type": "Feature",
-                    "properties": {
-                        "name": name,
-                        "boundary_role": "project_area_concession",
-                    },
+                    "properties": {"name": name, "boundary_role": "project_area_concession"},
                     "geometry": {"type": "Polygon", "coordinates": [coords]},
                 })
 
@@ -68,8 +65,8 @@ def _bounds_from_geojson(collection):
     return [[min(lats), min(lons)], [max(lats), max(lons)]]
 
 
-def render_map(hotspots, monitoring_points):
-    """Render the official two-boundary SERPRO WebGIS with monitoring overlays."""
+def render_map(hotspots, monitoring_points, focus="All Boundaries"):
+    """Render SERPRO WebGIS with official Project Area and Carbon Project Zone."""
     project_area = load_project_area()
     project_zone = load_carbon_project_zone()
 
@@ -81,10 +78,15 @@ def render_map(hotspots, monitoring_points):
     )
     Fullscreen().add_to(m)
 
+    show_project_area = focus in ("All Boundaries", "SERPRO Project Area", "Carbon Project Zone")
+    show_project_zone = focus in ("All Boundaries", "Carbon Project Zone")
+    if focus == "SERPRO Project Area":
+        show_project_zone = False
+
     if project_area["features"]:
+        area_layer = folium.FeatureGroup(name="🟢 SERPRO Project Area (Concession)", show=show_project_area)
         folium.GeoJson(
             project_area,
-            name="🟢 SERPRO Project Area (Concession)",
             style_function=lambda _: {
                 "color": "#146B43",
                 "weight": 2.5,
@@ -93,12 +95,13 @@ def render_map(hotspots, monitoring_points):
             },
             highlight_function=lambda _: {"weight": 4, "fillOpacity": 0.09},
             tooltip=folium.GeoJsonTooltip(fields=["name"], aliases=["Block"]),
-        ).add_to(m)
+        ).add_to(area_layer)
+        area_layer.add_to(m)
 
     if project_zone["features"]:
+        zone_layer = folium.FeatureGroup(name="🟣 SERPRO Carbon Project Zone", show=show_project_zone)
         folium.GeoJson(
             project_zone,
-            name="🟣 SERPRO Carbon Project Zone",
             style_function=lambda _: {
                 "color": "#6A4C93",
                 "weight": 3,
@@ -106,10 +109,9 @@ def render_map(hotspots, monitoring_points):
                 "fillOpacity": 0.08,
             },
             highlight_function=lambda _: {"weight": 4.5, "fillOpacity": 0.14},
-            tooltip=folium.GeoJsonTooltip(
-                fields=["name"], aliases=["Boundary"]
-            ),
-        ).add_to(m)
+            tooltip=folium.GeoJsonTooltip(fields=["name"], aliases=["Boundary"]),
+        ).add_to(zone_layer)
+        zone_layer.add_to(m)
 
     hotspot_group = folium.FeatureGroup(name="🔥 VIIRS Hotspots")
     for _, row in hotspots.iterrows():
@@ -136,15 +138,16 @@ def render_map(hotspots, monitoring_points):
         ).add_to(point_group)
     point_group.add_to(m)
 
-    bounds = _bounds_from_geojson(project_area)
-    zone_bounds = _bounds_from_geojson(project_zone)
-    if bounds and zone_bounds:
-        bounds = [
-            [min(bounds[0][0], zone_bounds[0][0]), min(bounds[0][1], zone_bounds[0][1])],
-            [max(bounds[1][0], zone_bounds[1][0]), max(bounds[1][1], zone_bounds[1][1])],
-        ]
-    else:
-        bounds = bounds or zone_bounds
+    target = project_zone if focus == "Carbon Project Zone" else project_area
+    bounds = _bounds_from_geojson(target)
+    if focus == "All Boundaries":
+        area_bounds = _bounds_from_geojson(project_area)
+        zone_bounds = _bounds_from_geojson(project_zone)
+        if area_bounds and zone_bounds:
+            bounds = [
+                [min(area_bounds[0][0], zone_bounds[0][0]), min(area_bounds[0][1], zone_bounds[0][1])],
+                [max(area_bounds[1][0], zone_bounds[1][0]), max(area_bounds[1][1], zone_bounds[1][1])],
+            ]
     if bounds:
         m.fit_bounds(bounds, padding=(20, 20))
 
