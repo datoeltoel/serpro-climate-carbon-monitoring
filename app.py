@@ -14,9 +14,16 @@ st.markdown('<div class="status">● Demo analytics · Official project boundari
 # Official boundary context
 project_area = load_project_area()
 project_zone = load_carbon_project_zone()
-project_area_ha = 31_685.39
-project_zone_area_ha = 150_142.54
-area_to_zone_pct = project_area_ha / project_zone_area_ha * 100
+project_area_ha = 31_685.38489
+project_zone_area_ha = 150_142.5436
+
+# Verified spatial relationship supplied from project GIS analysis.
+intersection_ha = 31_685.38491
+union_ha = 150_142.543553
+project_area_within_zone_pct = 100.0000000631
+project_zone_covered_by_project_area_pct = 21.1035354472
+project_area_only_ha = 0.00002
+carbon_zone_only_ha = 118_457.15869
 
 st.markdown('<div class="section-title">Project Landscape Summary</div>', unsafe_allow_html=True)
 st.markdown(
@@ -25,25 +32,23 @@ st.markdown(
       <div class="landscape-intro">
         <b>Unified SERPRO Project Landscape</b><br>
         SERPRO Project Area and SERPRO Carbon Project Zone are two official spatial boundaries
-        describing the same project landscape. They are spatially overlapping components, not separate projects.
+        describing the same landscape. Their GIS relationship shows that the Project Area is effectively
+        fully contained within the Carbon Project Zone, within numerical geometry tolerance.
       </div>
       <div class="landscape-grid">
         <div class="landscape-card area-card">
           <div class="landscape-icon">🟢</div>
           <div class="landscape-label">SERPRO Project Area</div>
-          <div class="landscape-value">31,685.39 ha</div>
+          <div class="landscape-value">31,685.38 ha</div>
           <div class="landscape-meta">PT KAL concession / project area · KAL_Boundary_Split.kml</div>
         </div>
-        <div class="landscape-connector">↔<span>SPATIALLY<br>OVERLAPPING</span></div>
+        <div class="landscape-connector">↔<span>OVERLAPPING<br>LANDSCAPE</span></div>
         <div class="landscape-card zone-card">
           <div class="landscape-icon">🟣</div>
           <div class="landscape-label">SERPRO Carbon Project Zone</div>
           <div class="landscape-value">150,142.54 ha</div>
           <div class="landscape-meta">Carbon project boundary · ProjectZone.kmz</div>
         </div>
-      </div>
-      <div class="landscape-note">
-        Official project-area values. The 21.10% figure below is an area ratio only; it is not presented as the geometric overlap percentage.
       </div>
     </div>
     """,
@@ -62,16 +67,24 @@ with summary_map_col:
 with summary_info_col:
     st.markdown(
         f"""
-        <div class="risk-card">
-          <div><b>LANDSCAPE RELATIONSHIP</b></div>
-          <div class="risk-number">{area_to_zone_pct:.2f}%</div>
-          <div class="risk-label">PROJECT AREA / CARBON ZONE</div>
+        <div class="relationship-card">
+          <div class="relationship-title">PROJECT SPATIAL RELATIONSHIP</div>
+          <div class="relationship-hero">≈100%</div>
+          <div class="relationship-sub">PROJECT AREA WITHIN CARBON ZONE</div>
           <hr>
-          <p><b>🟢 Project Area</b><br>{project_area_ha:,.2f} ha</p>
-          <p><b>🟣 Carbon Project Zone</b><br>{project_zone_area_ha:,.2f} ha</p>
-          <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,.09);font-size:.82rem;line-height:1.45;">
-            Both boundaries are displayed simultaneously to show their spatial relationship.
-            The ratio is an area comparison, not an overlap calculation.
+          <div class="relationship-row"><span>Intersection</span><b>{intersection_ha:,.5f} ha</b></div>
+          <div class="relationship-row"><span>Union</span><b>{union_ha:,.6f} ha</b></div>
+          <div class="relationship-row"><span>Project Area</span><b>{project_area_ha:,.5f} ha</b></div>
+          <div class="relationship-row"><span>Carbon Zone</span><b>{project_zone_area_ha:,.5f} ha</b></div>
+          <div class="relationship-divider"></div>
+          <div class="relationship-row"><span>Project Area → Zone</span><b>{project_area_within_zone_pct:.2f}%</b></div>
+          <div class="relationship-row"><span>Zone represented by Project Area</span><b>{project_zone_covered_by_project_area_pct:.2f}%</b></div>
+          <div class="relationship-note">
+            Project Area only: {project_area_only_ha:.5f} ha residual.<br>
+            Carbon Zone only: {carbon_zone_only_ha:,.5f} ha.
+          </div>
+          <div class="relationship-footnote">
+            Floating-point residuals are treated as numerical geometry tolerance and are not interpreted as meaningful land area.
           </div>
         </div>
         """,
@@ -92,15 +105,13 @@ scope_label = {
     "Carbon Project Zone": "SERPRO carbon project zone",
 }[scope]
 
-# Boundary areas are official supplied values. Live indicators remain demo values until
-# source-specific datasets are connected and spatially filtered by the selected scope.
 cols = st.columns(6)
 metrics = [
     ("🗺️ Project Area", f"{project_area_ha:,.0f} ha", "official KML · 6 blocks"),
     ("🟣 Carbon Zone", f"{project_zone_area_ha:,.0f} ha", "official ProjectZone area"),
-    ("🌧 Rainfall", "245 mm", "+18% vs normal"),
-    ("🌡 Temperature", "27.8 °C", "+0.6 °C anomaly"),
     ("🔥 Hotspots", "17", "+6 vs previous 7D"),
+    ("🌿 NDVI", "0.71", "+4.3% vs 7 days"),
+    ("🌧 Rainfall", "245 mm", "+18% vs normal"),
     ("🟣 Carbon Risk", "68 / 100", "HIGH RISK"),
 ]
 for col, (label, value, delta) in zip(cols, metrics):
@@ -140,4 +151,4 @@ for _, alert in data["alerts"].iterrows():
     cls = "alert-high" if priority == "HIGH" else "alert-medium" if priority == "MEDIUM" else "alert-low"
     st.markdown(f'<div class="{cls}"><b>{alert["Type"]}</b> · {alert["Location"]} · {alert["Date"]} · <b>{priority}</b></div>', unsafe_allow_html=True)
 
-st.caption("Boundary note: SERPRO Project Area uses KAL_Boundary_Split.kml; SERPRO Carbon Project Zone uses ProjectZone.kmz. They are spatially overlapping components of the same unified SERPRO project landscape. Monitoring indicators remain demo values until live spatial datasets are connected and filtered by the selected scope.")
+st.caption("Boundary note: SERPRO Project Area uses KAL_Boundary_Split.kml; SERPRO Carbon Project Zone uses ProjectZone.kmz. Verified spatial analysis shows the Project Area is effectively fully contained within the Carbon Project Zone. Monitoring indicators remain demo values until live spatial datasets are connected and filtered by the selected scope.")
