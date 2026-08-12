@@ -19,6 +19,9 @@ if fire.empty:
     st.info("Belum ada hotspot VIIRS. Jalankan **Update SERPRO Fire Monitoring** di GitHub Actions.")
     st.stop()
 
+fire["date"] = pd.to_datetime(fire["date"], errors="coerce")
+fire = fire.dropna(subset=["date"])
+
 scope = st.selectbox(
     "Monitoring scope",
     ["carbon_project_zone", "project_area"],
@@ -28,21 +31,50 @@ scope = st.selectbox(
     }[x],
 )
 
-scoped = fire[fire["scope"] == scope].copy().sort_values("date")
-latest_date = scoped["date"].max()
-last24 = scoped[scoped["date"] >= latest_date - pd.Timedelta(days=1)]
-last7 = scoped[scoped["date"] >= latest_date - pd.Timedelta(days=6)]
-last30 = scoped[scoped["date"] >= latest_date - pd.Timedelta(days=29)]
+scoped_all = fire[fire["scope"] == scope].copy().sort_values("date")
+if scoped_all.empty:
+    st.warning("Belum ada data hotspot untuk scope yang dipilih.")
+    st.stop()
+
+min_date = scoped_all["date"].min().date()
+max_date = scoped_all["date"].max().date()
+
+st.markdown("### 📅 Monitoring Date Range")
+d1, d2, d3 = st.columns([1, 1, 1])
+with d1:
+    start_date = st.date_input("Start date", value=min_date, min_value=min_date, max_value=max_date)
+with d2:
+    end_date = st.date_input("End date", value=max_date, min_value=min_date, max_value=max_date)
+with d3:
+    preset = st.selectbox("Quick range", ["Custom", "Latest 24H", "Latest 7D", "Latest 30D"])
+
+if preset != "Custom":
+    end_date = max_date
+    days = {"Latest 24H": 1, "Latest 7D": 7, "Latest 30D": 30}[preset]
+    start_date = max(min_date, max_date - pd.Timedelta(days=days - 1))
+
+if start_date > end_date:
+    st.error("Start date harus lebih kecil atau sama dengan End date.")
+    st.stop()
+
+scoped = scoped_all[
+    (scoped_all["date"].dt.date >= start_date)
+    & (scoped_all["date"].dt.date <= end_date)
+].copy()
+
+selected_latest = scoped["date"].max() if not scoped.empty else pd.Timestamp(end_date)
+last24 = scoped[scoped["date"] >= selected_latest - pd.Timedelta(days=1)]
+last7 = scoped[scoped["date"] >= selected_latest - pd.Timedelta(days=6)]
 
 low7 = int((last7["confidence"] == 0).sum())
 moderate7 = int((last7["confidence"] == 1).sum())
 high7 = int((last7["confidence"] == 2).sum())
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Hotspots — 24H", f"{len(last24)}")
-c2.metric("Hotspots — 7D", f"{len(last7)}")
-c3.metric("High confidence — 7D", f"{high7}")
-c4.metric("Latest observation", latest_date.date().isoformat())
+c1.metric("Hotspots — selected range", f"{len(scoped)}")
+c2.metric("Hotspots — last 7D", f"{len(last7)}")
+c3.metric("High confidence — last 7D", f"{high7}")
+c4.metric("Latest selected observation", selected_latest.date().isoformat())
 
 st.markdown("### Confidence & operational response")
 legend_cols = st.columns(3)
@@ -61,15 +93,15 @@ for col, (label, color, count, action, text) in zip(legend_cols, legend):
         )
 
 st.info(
-    f"**Latest available VIIRS observation:** {latest_date.date()} · **Sources:** NASA LANCE VIIRS S-NPP + NOAA-20 · "
+    f"**Latest available selected observation:** {selected_latest.date()} · **Sources:** NASA LANCE VIIRS S-NPP + NOAA-20 · "
     "**Resolution:** 375 m · Confidence is source-native (Low / Nominal / High); SERPRO displays Nominal as Moderate. "
     "Hotspots are satellite detections and must be verified in the field."
 )
 
-alerts = build_field_alerts(scoped, latest_date)
+alerts = build_field_alerts(scoped, selected_latest)
 st.markdown("### 🚨 Field Follow-up Alerts")
 if alerts.empty:
-    st.success("No high-confidence hotspot detected on the latest available observation day for the selected scope.")
+    st.success("No high-confidence hotspot detected on the latest selected observation day for the selected scope.")
 else:
     for _, a in alerts.iterrows():
         if a["priority"] == "HIGH":
@@ -98,11 +130,13 @@ if area.get("features"):
     ).add_to(m)
 
 hotspots_layer = folium.FeatureGroup(name="🔥 VIIRS Hotspots", show=True)
-for _, row in last30.iterrows():
+for _, row in scoped.iterrows():
     conf = int(row["confidence"]) if pd.notna(row["confidence"]) else 0
     label = CONFIDENCE_LABEL.get(conf, "UNKNOWN")
     display_label = "MODERATE" if label == "NOMINAL" else label
     color = {0: "#9E9E9E", 1: "#F9A825", 2: "#D32F2F"}.get(conf, "#9E9E9E")
+    ti4 = row.get("brightness_ti4_k")
+    ti4_text = f"{float(ti4):.1f} K" if pd.notna(ti4) else "—"
     folium.CircleMarker(
         location=[row["latitude"], row["longitude"]],
         radius=6 if conf == 2 else 5,
@@ -113,7 +147,7 @@ for _, row in last30.iterrows():
         popup=(
             f"<b>VIIRS Active Fire</b><br>Date: {row['date'].date()}<br>"
             f"Confidence: {display_label}<br>Source: {row['source']}<br>"
-            f"TI4: {row['brightness_ti4_k']:.1f} K<br>"
+            f"TI4: {ti4_text}<br>"
             f"Location: {row['latitude']:.5f}, {row['longitude']:.5f}"
         ),
     ).add_to(hotspots_layer)
@@ -130,7 +164,7 @@ fig = px.bar(
     y="hotspots",
     color="confidence_label",
     barmode="stack",
-    title=f"Daily VIIRS hotspots · {scope.replace('_', ' ').title()}",
+    title=f"Daily VIIRS hotspots · {scope.replace('_', ' ').title()} · {start_date} to {end_date}",
     labels={"date": "Date", "hotspots": "Hotspots", "confidence_label": "Confidence"},
 )
 fig.update_layout(height=340, margin=dict(l=20, r=20, t=50, b=20))
