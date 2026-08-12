@@ -1,7 +1,7 @@
 import streamlit as st
 from streamlit_folium import st_folium
 from utils.demo_data import load_demo_data
-from utils.scope_engine import get_scope, scope_options, SPATIAL_RELATIONSHIP, containment_percent
+from utils.scope_engine import get_scope, scope_options, SPATIAL_RELATIONSHIP
 from utils.ui import setup_page
 from utils.map import load_carbon_project_zone, load_project_area, render_map
 
@@ -15,8 +15,12 @@ st.markdown('<div class="status">● Demo analytics · Official project boundari
 # Official boundary context
 project_area = load_project_area()
 project_zone = load_carbon_project_zone()
-project_area_ha = get_scope("SERPRO Project Area").area_ha
-project_zone_area_ha = get_scope("SERPRO Carbon Project Zone").area_ha
+project_area_scope = get_scope("SERPRO Project Area")
+project_zone_scope = get_scope("SERPRO Carbon Project Zone")
+project_area_ha = project_area_scope.area_ha
+project_zone_area_ha = project_zone_scope.area_ha
+containment = min(100.0, SPATIAL_RELATIONSHIP["project_area_containment_percent"])
+zone_share = SPATIAL_RELATIONSHIP["project_area_share_of_carbon_zone_percent"]
 
 st.markdown('<div class="section-title">Project Landscape Summary</div>', unsafe_allow_html=True)
 st.markdown(
@@ -59,8 +63,6 @@ with summary_map_col:
         key="project_landscape_summary_map",
     )
 with summary_info_col:
-    containment = min(100.0, SPATIAL_RELATIONSHIP["intersection_as_percent_of_project_area"])
-    zone_share = SPATIAL_RELATIONSHIP["project_area_as_percent_of_carbon_zone"]
     st.markdown(
         f"""
         <div class="risk-card">
@@ -72,27 +74,15 @@ with summary_info_col:
           <p><b>Union</b><br>{SPATIAL_RELATIONSHIP['union_area_ha']:,.6f} ha</p>
           <p><b>Project Area share of Carbon Zone</b><br>{zone_share:.2f}%</p>
           <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,.09);font-size:.82rem;line-height:1.45;">
-            Floating-point residuals below practical mapping precision are treated as geometry tolerance, not meaningful land area.
+            Geometry differences below practical mapping precision are treated as tolerance, not meaningful land area.
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-st.markdown('<div class="section-title">Scope Engine</div>', unsafe_allow_html=True)
-st.markdown(
-    """
-    <div class="scope-engine">
-      <div class="scope-node root"><b>SERPRO Project Landscape</b><span>Unified monitoring envelope</span></div>
-      <div class="scope-line">↓</div>
-      <div class="scope-node zone"><b>SERPRO Carbon Project Zone</b><span>Primary project-zone scope</span></div>
-      <div class="scope-line">↓</div>
-      <div class="scope-node area"><b>SERPRO Project Area</b><span>Contained concession / project-area subset</span></div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
+# Simple monitoring-scope selector. The previous Scope Engine diagram has been removed.
+st.markdown('<div class="section-title">Monitoring Scope</div>', unsafe_allow_html=True)
 scope = st.selectbox(
     "Select monitoring scope",
     scope_options(),
@@ -106,7 +96,7 @@ scope = st.selectbox(
 selected_scope = get_scope(scope)
 
 st.caption(
-    f"Active scope: **{selected_scope.name}** · Area: **{selected_scope.area_ha:,.2f} ha** · {selected_scope.description}"
+    f"Active scope: **{selected_scope.label}** · Area: **{selected_scope.area_ha:,.2f} ha** · {selected_scope.role}"
 )
 
 cols = st.columns(6)
