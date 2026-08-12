@@ -1,0 +1,14 @@
+{
+  "source": "UCSB-CHG/CHIRPS/DAILY",
+  "historical_period": "1981-2025",
+  "climatology_period": "1991-2020",
+  "spatial_resolution_m": 5566,
+  "cadence": "daily",
+  "scope": [
+    "carbon_project_zone",
+    "project_area"
+  ],
+  "generated_utc": "2026-08-12T17:08:10.174890+00:00",
+  "monthly_records": 1080,
+  "climatology_records": 24
+}
