@@ -1,0 +1,11 @@
+{
+  "source": "UCSB-CHG/CHIRPS/DAILY",
+  "baseline_period": "1991-2020",
+  "calendar_key": "month-day",
+  "scopes": [
+    "carbon_project_zone",
+    "project_area"
+  ],
+  "records": 732,
+  "generated_utc": "2026-08-12T17:21:33.892235+00:00"
+}
