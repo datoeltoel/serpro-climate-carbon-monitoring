@@ -1,0 +1,31 @@
+{
+  "project": "Seruyan Restoration Ecosystem Project (SERPRO)",
+  "project_owner": "PT Kalamanthana Alam Lestari",
+  "spatial_relationship": {
+    "description": "SERPRO Project Area and SERPRO Carbon Project Zone form one unified project landscape and are spatially overlapping. The Project Area is the PT Kalamanthana Alam Lestari concession footprint, while the Carbon Project Zone is the wider carbon-project footprint shown in the supplied project-zone boundary.",
+    "interpretation_note": "Do not treat the two layers as unrelated or mutually exclusive geographies. Metrics may be scoped to either layer, but both belong to the same SERPRO project landscape."
+  },
+  "layers": {
+    "serpro_project_area": {
+      "display_name": "SERPRO Project Area (Concession)",
+      "source_file": "KAL_Boundary_Split.kml",
+      "source_type": "KML",
+      "crs": "EPSG:4326",
+      "feature_count": 6,
+      "area_ha_source_metadata": 31685.385,
+      "role": "PT Kalamanthana Alam Lestari concession / project area."
+    },
+    "serpro_carbon_project_zone": {
+      "display_name": "SERPRO Carbon Project Zone",
+      "source_file": "ProjectZone.kmz",
+      "source_type": "KMZ",
+      "crs": "EPSG:4326",
+      "feature_count": 1,
+      "area_ha_source_metadata": 150142.54,
+      "area_ha_display": "150.142,54",
+      "area_basis": "Official project-zone area supplied by project owner",
+      "role": "Wider carbon-project footprint for the Seruyan Restoration Ecosystem Project (SERPRO)."
+    }
+  },
+  "webgis_note": "Web layers are generalized for public map rendering; source geometries remain represented by their source metadata. Carbon Project Zone area is the official project-zone area supplied by the project owner and is not inferred from the generalized web geometry."
+}
