@@ -1,0 +1,12 @@
+{
+  "source": "MODIS/061/MOD14A1",
+  "period": "2017-2025",
+  "resolution_m": 1000,
+  "metric": "annual fire-pixel detections from FireMask classes 7-9",
+  "classes": {
+    "7": "Fire, low confidence",
+    "8": "Fire, nominal confidence",
+    "9": "Fire, high confidence"
+  },
+  "note": "Historical trend is a detection-count indicator and is not equivalent to unique fire events or burned area. Current operational map remains VIIRS 375 m NRT."
+}

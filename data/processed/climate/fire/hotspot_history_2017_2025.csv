@@ -1,0 +1,19 @@
+year,scope,hotspot_detections,source,resolution_m,metric,processing_time_utc
+2017,carbon_project_zone,2,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:35.872442+00:00
+2017,project_area,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:38.197383+00:00
+2018,carbon_project_zone,16,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:40.053728+00:00
+2018,project_area,4,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:40.760372+00:00
+2019,carbon_project_zone,156,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:42.382230+00:00
+2019,project_area,36,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:45.080569+00:00
+2020,carbon_project_zone,1,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:47.223664+00:00
+2020,project_area,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:48.154992+00:00
+2021,carbon_project_zone,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:50.442449+00:00
+2021,project_area,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:52.345668+00:00
+2022,carbon_project_zone,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:54.507879+00:00
+2022,project_area,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:56.041963+00:00
+2023,carbon_project_zone,111,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:57.825051+00:00
+2023,project_area,16,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:29:58.657902+00:00
+2024,carbon_project_zone,2,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:30:01.319795+00:00
+2024,project_area,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:30:03.327995+00:00
+2025,carbon_project_zone,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:30:05.799112+00:00
+2025,project_area,0,MODIS/061/MOD14A1,1000,annual fire-pixel detections,2026-08-12T18:30:08.195366+00:00
