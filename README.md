@@ -2,20 +2,26 @@
 
 Climate intelligence and spatial monitoring platform for the **Seruyan Restoration Ecosystem Project (SERPRO)** by PT Kalamanthana Alam Lestari.
 
-## Boundary model
+## Boundary and scope model
 
-The WebGIS explicitly separates two official spatial layers:
+The WebGIS uses two official spatial layers within one unified SERPRO project landscape:
 
-- **SERPRO Project Area (Concession)** — the full PT Kalamanthana Alam Lestari concession / project area from `KAL_Boundary_Split.kml`.
-- **SERPRO Carbon Project Zone** — the carbon project boundary supplied in `ProjectZone.kmz`.
+- **SERPRO Carbon Project Zone** — the primary spatial envelope supplied in `ProjectZone.kmz` (official area: 150,142.5436 ha).
+- **SERPRO Project Area** — the contained PT Kalamanthana Alam Lestari concession/project-area subset from `KAL_Boundary_Split.kml` (official area: 31,685.38489 ha).
 
-Carbon/MRV metrics should default to the **Carbon Project Zone** unless a metric is explicitly labelled as concession / Project Area level.
+Spatial analysis supplied by the project GIS confirms that the Project Area is effectively fully contained within the Carbon Project Zone. The intersection is approximately equal to the Project Area, within numerical geometry tolerance.
 
-The Overview dashboard now includes a **Monitoring Scope** selector:
+The Overview dashboard implements a hierarchical **Scope Engine**:
 
-- `All Boundaries` — view both official boundaries.
-- `SERPRO Project Area` — focus the map on the concession / Project Area.
-- `Carbon Project Zone` — focus the map on the SERPRO carbon project boundary.
+```text
+SERPRO Project Landscape
+        ↓
+SERPRO Carbon Project Zone
+        ↓
+SERPRO Project Area
+```
+
+Scope-specific analytics can later be spatially filtered using the same hierarchy for rainfall, temperature, fire, vegetation, hydrology, disturbance and MRV indicators.
 
 ## MVP
 
@@ -23,26 +29,32 @@ The first release focuses on:
 
 - 🌿 Overview dashboard
 - 🗺️ Interactive WebGIS
+- 🧭 Project Landscape Summary
+- 🧭 Hierarchical Scope Engine
 - 🌧 Climate monitoring
 - 🔥 Fire monitoring
 - 🌿 Vegetation / NDVI monitoring
 - 🚨 Alert center
 - 📊 Climate Risk Index prototype
 
-> **Current status:** UI/UX and application architecture are in MVP stage. Monitoring values are demo data; the two WebGIS boundary layers are official project inputs supplied for this application.
+> **Current status:** UI/UX and application architecture are in MVP stage. Monitoring values are demo data; the two WebGIS boundary layers and spatial relationship metrics are official project inputs supplied for this application.
 
 ## Architecture
 
 ```text
-Public climate / satellite data
-          ↓
-     Data processing
-          ↓
-   GitHub / data store
-          ↓
-      Streamlit
-          ↓
- WebGIS + analytics + alerts
+Official boundaries + spatial relationship
+                 ↓
+            Scope Engine
+                 ↓
+       Climate / satellite data
+                 ↓
+          Data processing
+                 ↓
+        GitHub / data store
+                 ↓
+             Streamlit
+                 ↓
+       WebGIS + analytics + alerts
 ```
 
 ## Repository structure
@@ -56,6 +68,7 @@ Public climate / satellite data
 ├── utils/
 │   ├── demo_data.py
 │   ├── map.py
+│   ├── scope_engine.py
 │   └── ui.py
 ├── data/
 │   ├── static/boundaries/
@@ -84,4 +97,4 @@ streamlit run app.py
 
 ## Development roadmap
 
-**MVP → Live climate feeds → automated hotspot monitoring → vegetation change → peatland hydrology → MRV & carbon risk → reporting/export.**
+**MVP → Scope-aware live climate feeds → automated hotspot monitoring → vegetation change → peatland hydrology → MRV & carbon risk → reporting/export.**
