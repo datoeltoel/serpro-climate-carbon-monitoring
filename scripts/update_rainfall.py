@@ -19,6 +19,7 @@ OUTPUT = Path("data/processed/climate/rainfall/rainfall_daily.csv")
 COLLECTION = "NASA/GPM_L3/IMERG_V07"
 PRECIP_BAND = "precipitation"
 HALF_HOUR_HOURS = 0.5
+DAYS_TO_KEEP = 30
 
 
 def authenticate_ee() -> None:
@@ -26,17 +27,14 @@ def authenticate_ee() -> None:
     cloud_project = os.environ.get("EE_PROJECT_ID")
     if not key_json or not cloud_project:
         raise RuntimeError("Set EE_SERVICE_ACCOUNT_JSON and EE_PROJECT_ID GitHub secrets.")
-
     try:
         info = json.loads(key_json)
     except json.JSONDecodeError as exc:
         raise RuntimeError("EE_SERVICE_ACCOUNT_JSON is not valid JSON.") from exc
-
     required = ("type", "project_id", "private_key", "client_email", "token_uri")
     missing = [field for field in required if not info.get(field)]
     if missing:
         raise RuntimeError("EE_SERVICE_ACCOUNT_JSON is missing required fields: " + ", ".join(missing))
-
     private_key = info["private_key"].strip()
     if "..." in private_key:
         raise RuntimeError("EE_SERVICE_ACCOUNT_JSON contains placeholder text ('...') in private_key.")
@@ -117,15 +115,13 @@ def fetch_day(date_value: date, scopes):
 
     rows = []
     for scope_name, geometry in scopes.items():
-        rows.append(
-            {
-                "date": date_value.strftime("%Y-%m-%d"),
-                "scope": scope_name,
-                "rainfall_mm": zonal_daily_rainfall(collection, geometry),
-                "source": COLLECTION,
-                "processing_time_utc": datetime.now(timezone.utc).isoformat(),
-            }
-        )
+        rows.append({
+            "date": date_value.strftime("%Y-%m-%d"),
+            "scope": scope_name,
+            "rainfall_mm": zonal_daily_rainfall(collection, geometry),
+            "source": COLLECTION,
+            "processing_time_utc": datetime.now(timezone.utc).isoformat(),
+        })
     return rows
 
 
@@ -140,7 +136,7 @@ def main() -> None:
     if latest is None:
         raise RuntimeError("GPM IMERG collection contains no observations.")
 
-    dates = [latest - timedelta(days=i) for i in range(7, -1, -1)]
+    dates = [latest - timedelta(days=i) for i in range(DAYS_TO_KEEP - 1, -1, -1)]
     rows = []
     for date_value in dates:
         rows.extend(fetch_day(date_value, scopes))
@@ -155,6 +151,7 @@ def main() -> None:
         writer.writerows(rows)
     print(f"Wrote {len(rows)} rows to {OUTPUT}")
     print(f"Latest available GPM date: {latest}")
+    print(f"Retention window: {DAYS_TO_KEEP} calendar days")
 
 
 if __name__ == "__main__":
