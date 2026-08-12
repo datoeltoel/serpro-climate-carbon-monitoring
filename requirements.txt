@@ -4,3 +4,4 @@ plotly>=5.24,<7
 folium>=0.19,<1
 streamlit-folium>=0.24,<1
 earthengine-api>=1.6,<2
+scipy>=1.13,<2
