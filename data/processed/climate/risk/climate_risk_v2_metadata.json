@@ -1,0 +1,17 @@
+{
+  "version": "v2",
+  "inputs": [
+    "30-day rainfall anomaly",
+    "SPI-3",
+    "SPI-6",
+    "NDMI 30-day change",
+    "FIRMS 7-day hotspot density"
+  ],
+  "risk_levels": {
+    "low": "0-2",
+    "moderate": "3-5",
+    "high": "6-8",
+    "very_high": ">=9"
+  },
+  "note": "Screening index for monitoring prioritization; not a calibrated fire-danger or carbon-accounting metric."
+}
