@@ -1,7 +1,8 @@
 """Build recent Sentinel-2 NDMI observations for SERPRO scopes.
 
-Source: COPERNICUS/S2_SR_HARMONIZED + COPERNICUS/S2_CLOUD_PROBABILITY.
-Outputs scene-level zonal NDMI means for the latest 90 days.
+Uses Sentinel-2 SR Harmonized with scene-level cloud filtering and SCL
+masking. Avoids fragile cross-collection joins so empty cloud matches cannot
+produce null ee.Image objects.
 """
 from __future__ import annotations
 
@@ -21,9 +22,8 @@ PROJECT_AREA_KML = Path("data/static/project_boundary.kml.gz")
 PROJECT_ZONE_GEOJSON = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 OUTPUT = Path("data/processed/climate/vegetation/ndmi_daily.csv")
 S2 = "COPERNICUS/S2_SR_HARMONIZED"
-S2_CLOUD = "COPERNICUS/S2_CLOUD_PROBABILITY"
 LOOKBACK_DAYS = 90
-MAX_CLOUD_PROBABILITY = 40
+MAX_CLOUDY_PIXEL_PERCENTAGE = 40
 SCALE = 20
 
 
@@ -32,10 +32,16 @@ def authenticate_ee() -> None:
     cloud_project = os.environ.get("EE_PROJECT_ID")
     if not key_json or not cloud_project:
         raise RuntimeError("Set EE_SERVICE_ACCOUNT_JSON and EE_PROJECT_ID GitHub secrets.")
+
     info = json.loads(key_json)
     private_key = info["private_key"].strip()
-    if "..." in private_key or not private_key.startswith("-----BEGIN PRIVATE KEY-----") or not private_key.endswith("-----END PRIVATE KEY-----"):
+    if (
+        "..." in private_key
+        or not private_key.startswith("-----BEGIN PRIVATE KEY-----")
+        or not private_key.endswith("-----END PRIVATE KEY-----")
+    ):
         raise RuntimeError("Invalid EE service-account private key.")
+
     credentials = service_account.Credentials.from_service_account_info(
         info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
     )
@@ -47,8 +53,11 @@ def authenticate_ee() -> None:
 def project_area_geometry() -> ee.Geometry:
     with gzip.open(PROJECT_AREA_KML, "rb") as fh:
         root = ET.fromstring(fh.read())
+
     polygons = []
-    for node in root.findall(".//kml:Polygon/kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS):
+    for node in root.findall(
+        ".//kml:Polygon/kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS
+    ):
         coords = []
         for item in (node.text or "").split():
             p = item.split(",")
@@ -56,6 +65,7 @@ def project_area_geometry() -> ee.Geometry:
                 coords.append([float(p[0]), float(p[1])])
         if len(coords) >= 4:
             polygons.append(ee.Geometry.Polygon(coords))
+
     if not polygons:
         raise RuntimeError("No polygons found in SERPRO Project Area KML.")
     return ee.Geometry.MultiPolygon(polygons) if len(polygons) > 1 else polygons[0]
@@ -69,85 +79,94 @@ def project_zone_geometry() -> ee.Geometry:
     return ee.Geometry(features[0]["geometry"])
 
 
-def add_cloud_mask(img):
-    cloud_obj = img.get("cloud_mask")
-    return ee.Image(img).updateMask(ee.Image(cloud_obj).select("probability").lt(MAX_CLOUD_PROBABILITY))
+def mask_s2(img: ee.Image) -> ee.Image:
+    # SCL classes to mask: saturated/defective (1), no-data (0), cloud shadow (3),
+    # medium/high cloud (8, 9), cirrus (10), snow/ice (11).
+    scl = img.select("SCL")
+    valid = (
+        scl.neq(0)
+        .And(scl.neq(1))
+        .And(scl.neq(3))
+        .And(scl.neq(8))
+        .And(scl.neq(9))
+        .And(scl.neq(10))
+        .And(scl.neq(11))
+    )
+    return img.updateMask(valid)
 
 
-def add_ndmi(img):
-    img = ee.Image(img)
+def add_ndmi(img: ee.Image) -> ee.Image:
+    # NDMI = (NIR - SWIR1) / (NIR + SWIR1); Sentinel-2: B8 and B11.
     return img.addBands(img.normalizedDifference(["B8", "B11"]).rename("NDMI"))
 
 
-def build_collection(region: ee.Geometry, start: str, end: str):
-    criteria = ee.Filter.And(ee.Filter.bounds(region), ee.Filter.date(start, end))
-    sr = ee.ImageCollection(S2).filter(criteria).filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 80))
-    clouds = ee.ImageCollection(S2_CLOUD).filter(criteria)
-    joined = ee.Join.saveFirst("cloud_mask").apply(
-        primary=sr,
-        secondary=clouds,
-        condition=ee.Filter.equals(leftField="system:index", rightField="system:index"),
+def build_collection(region: ee.Geometry, start: str, end: str) -> ee.ImageCollection:
+    return (
+        ee.ImageCollection(S2)
+        .filterBounds(region)
+        .filterDate(start, end)
+        .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", MAX_CLOUDY_PIXEL_PERCENTAGE))
+        .map(mask_s2)
+        .map(add_ndmi)
     )
-    # Keep only SR scenes for which a matching cloud-probability image exists.
-    joined = ee.ImageCollection(joined).filter(ee.Filter.notNull(["cloud_mask"]))
-    return joined.map(add_cloud_mask).map(add_ndmi)
 
 
-def zonal_mean(img, geometry):
-    value = img.select("NDMI").reduceRegion(
+def zonal_mean(img: ee.Image, geometry: ee.Geometry):
+    return img.select("NDMI").reduceRegion(
         reducer=ee.Reducer.mean(),
         geometry=geometry,
         scale=SCALE,
         maxPixels=2_000_000,
         bestEffort=True,
     ).get("NDMI")
-    return value
 
 
 def main() -> None:
     authenticate_ee()
+
     scopes = {
         "carbon_project_zone": project_zone_geometry(),
         "project_area": project_area_geometry(),
     }
+    region = scopes["carbon_project_zone"].union(scopes["project_area"], maxError=1)
+
     end = date.today() + timedelta(days=1)
     start = end - timedelta(days=LOOKBACK_DAYS)
-    region = scopes["carbon_project_zone"].union(scopes["project_area"], maxError=1)
     collection = build_collection(region, start.isoformat(), end.isoformat()).sort("system:time_start")
 
-    # Pull stable scene identifiers and timestamps in one server-side evaluation.
-    scene_ids = collection.aggregate_array("system:index").getInfo()
-    scene_times = collection.aggregate_array("system:time_start").getInfo()
-    scene_cloud = collection.aggregate_array("CLOUDY_PIXEL_PERCENTAGE").getInfo()
+    # Convert collection metadata to plain Python once; process each known scene
+    # by its positional index rather than by a possibly missing system:index.
+    scene_count = int(collection.size().getInfo())
+    if scene_count == 0:
+        raise RuntimeError("No Sentinel-2 scenes found for the latest 90 days after cloud filtering.")
+
+    scene_dates = collection.aggregate_array("system:time_start").getInfo()
+    cloud_pct = collection.aggregate_array("CLOUDY_PIXEL_PERCENTAGE").getInfo()
 
     rows = []
-    for idx, scene_id in enumerate(scene_ids):
-        img = collection.filter(ee.Filter.eq("system:index", scene_id)).first()
-        if img is None:
-            continue
-        scene_ms = scene_times[idx] if idx < len(scene_times) else None
-        scene_date = datetime.fromtimestamp(scene_ms / 1000, tz=timezone.utc).date().isoformat() if scene_ms else None
-        cloudy_pct = scene_cloud[idx] if idx < len(scene_cloud) else None
-        if scene_date is None:
-            continue
+    for idx, timestamp_ms in enumerate(scene_dates):
+        img = ee.Image(collection.toList(scene_count).get(idx))
+        scene_date = datetime.fromtimestamp(float(timestamp_ms) / 1000.0, tz=timezone.utc).date().isoformat()
+        cloudy = cloud_pct[idx] if idx < len(cloud_pct) else None
 
         for scope_name, geometry in scopes.items():
             value = zonal_mean(img, geometry)
             value = value.getInfo() if value is not None else None
             if value is None:
                 continue
-            rows.append({
-                "date": scene_date,
-                "scope": scope_name,
-                "ndmi": float(value),
-                "cloudy_pixel_percentage": float(cloudy_pct) if cloudy_pct is not None else None,
-                "scene_id": scene_id,
-                "source": S2,
-                "processing_time_utc": datetime.now(timezone.utc).isoformat(),
-            })
+            rows.append(
+                {
+                    "date": scene_date,
+                    "scope": scope_name,
+                    "ndmi": float(value),
+                    "cloudy_pixel_percentage": float(cloudy) if cloudy is not None else None,
+                    "source": S2,
+                    "processing_time_utc": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
     if not rows:
-        raise RuntimeError("No valid Sentinel-2 NDMI observations were found for the latest 90 days.")
+        raise RuntimeError("Sentinel-2 scenes were found, but no valid NDMI zonal observations were produced.")
 
     rows.sort(key=lambda r: (r["date"], r["scope"]))
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -155,7 +174,9 @@ def main() -> None:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
+
     print(f"Wrote {len(rows)} NDMI records to {OUTPUT}")
+    print(f"Sentinel-2 scenes processed: {scene_count}")
 
 
 if __name__ == "__main__":
