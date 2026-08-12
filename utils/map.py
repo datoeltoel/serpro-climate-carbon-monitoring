@@ -78,10 +78,8 @@ def render_map(hotspots, monitoring_points, focus="All Boundaries"):
     )
     Fullscreen().add_to(m)
 
-    show_project_area = focus in ("All Boundaries", "SERPRO Project Area", "Carbon Project Zone")
+    show_project_area = focus in ("All Boundaries", "SERPRO Project Area")
     show_project_zone = focus in ("All Boundaries", "Carbon Project Zone")
-    if focus == "SERPRO Project Area":
-        show_project_zone = False
 
     if project_area["features"]:
         area_layer = folium.FeatureGroup(name="🟢 SERPRO Project Area (Concession)", show=show_project_area)
