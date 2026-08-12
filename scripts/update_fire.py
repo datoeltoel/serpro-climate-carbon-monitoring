@@ -1,7 +1,11 @@
-"""Update recent SERPRO active-fire detections from NASA FIRMS in Earth Engine.
+"""Update recent SERPRO fire detections from NASA LANCE VIIRS in Earth Engine.
 
-Source: FIRMS (MODIS LANCE near-real-time active fire raster), daily cadence.
-Outputs fire hotspot points inside the official Carbon Project Zone and Project Area.
+Sources:
+- NASA/LANCE/SNPP_VIIRS/C2 (VIIRS 375 m)
+- NASA/LANCE/NOAA20_VIIRS/C2 (VIIRS 375 m)
+
+The VIIRS confidence class is native: 0=low, 1=nominal, 2=high.
+For SERPRO UI these are presented as Low / Moderate / High.
 """
 from __future__ import annotations
 
@@ -20,9 +24,12 @@ KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 PROJECT_AREA_KML = Path("data/static/project_boundary.kml.gz")
 PROJECT_ZONE_GEOJSON = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 OUTPUT = Path("data/processed/climate/fire/fire_hotspots.csv")
-FIRMS = "FIRMS"
 LOOKBACK_DAYS = 30
-SCALE = 1000
+SCALE = 375
+COLLECTIONS = {
+    "VIIRS-SNPP": "NASA/LANCE/SNPP_VIIRS/C2",
+    "VIIRS-NOAA20": "NASA/LANCE/NOAA20_VIIRS/C2",
+}
 
 
 def authenticate_ee() -> None:
@@ -38,6 +45,8 @@ def authenticate_ee() -> None:
         info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
     )
     ee.Initialize(credentials=credentials, project=cloud_project)
+    print(f"Earth Engine initialized with project: {cloud_project}")
+    print(f"Earth Engine service account: {info.get('client_email')}")
 
 
 def project_area_geometry() -> ee.Geometry:
@@ -65,10 +74,9 @@ def project_zone_geometry() -> ee.Geometry:
     return ee.Geometry(features[0]["geometry"])
 
 
-def sample_image(image: ee.Image, geometry: ee.Geometry, scope_name: str, date_str: str):
-    # FIRMS stores active fires in rasterized form. T21 is masked except where active fire is detected.
-    fire = image.select(["T21", "confidence"])
-    samples = fire.sample(
+def sample_image(image: ee.Image, geometry: ee.Geometry, scope_name: str, source: str, date_str: str):
+    bands = image.select(["Bright_ti4", "Bright_ti5", "confidence"])
+    samples = bands.sample(
         region=geometry,
         scale=SCALE,
         geometries=True,
@@ -81,14 +89,18 @@ def sample_image(image: ee.Image, geometry: ee.Geometry, scope_name: str, date_s
         coords = feature.get("geometry", {}).get("coordinates", [None, None])
         if coords[0] is None or coords[1] is None:
             continue
+        confidence = props.get("confidence")
+        if confidence is None:
+            continue
         rows.append({
             "date": date_str,
             "scope": scope_name,
             "longitude": float(coords[0]),
             "latitude": float(coords[1]),
-            "brightness_temperature_k": float(props["T21"]) if props.get("T21") is not None else None,
-            "confidence": float(props["confidence"]) if props.get("confidence") is not None else None,
-            "source": FIRMS,
+            "brightness_ti4_k": float(props["Bright_ti4"]) if props.get("Bright_ti4") is not None else None,
+            "brightness_ti5_k": float(props["Bright_ti5"]) if props.get("Bright_ti5") is not None else None,
+            "confidence": int(confidence),
+            "source": source,
             "resolution_m": SCALE,
             "processing_time_utc": datetime.now(timezone.utc).isoformat(),
         })
@@ -105,28 +117,48 @@ def main() -> None:
     start = end - timedelta(days=LOOKBACK_DAYS)
     region = scopes["carbon_project_zone"].union(scopes["project_area"], maxError=1)
 
-    collection = ee.ImageCollection(FIRMS).filterDate(start.isoformat(), end.isoformat()).filterBounds(region)
-    image_info = collection.sort("system:time_start").toList(collection.size()).getInfo()
-    images = collection.sort("system:time_start").toList(collection.size())
-
     rows = []
-    for idx, meta in enumerate(image_info):
-        image = ee.Image(images.get(idx))
-        date_str = ee.Date(meta.get("properties", {}).get("system:time_start")).format("YYYY-MM-dd").getInfo()
-        for scope_name, geometry in scopes.items():
-            rows.extend(sample_image(image, geometry, scope_name, date_str))
+    total_images = 0
+    for source_name, collection_id in COLLECTIONS.items():
+        collection = ee.ImageCollection(collection_id).filterDate(start.isoformat(), end.isoformat()).filterBounds(region)
+        image_info = collection.sort("system:time_start").toList(collection.size()).getInfo()
+        images = collection.sort("system:time_start").toList(collection.size())
+        total_images += len(image_info)
+        for idx, meta in enumerate(image_info):
+            image = ee.Image(images.get(idx))
+            ts = meta.get("properties", {}).get("system:time_start")
+            if ts is None:
+                continue
+            date_str = ee.Date(ts).format("YYYY-MM-dd").getInfo()
+            for scope_name, geometry in scopes.items():
+                rows.extend(sample_image(image, geometry, scope_name, source_name, date_str))
+
+    # De-duplicate repeated detections from overlapping satellite products at identical coordinates/date/scope.
+    dedup = {}
+    for row in rows:
+        key = (
+            row["date"], row["scope"],
+            round(row["latitude"], 5), round(row["longitude"], 5),
+        )
+        current = dedup.get(key)
+        if current is None or row["confidence"] > current["confidence"]:
+            dedup[key] = row
+    rows = list(dedup.values())
+    rows.sort(key=lambda r: (r["date"], r["scope"], -r["confidence"], r["latitude"], r["longitude"]))
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = [
-        "date", "scope", "longitude", "latitude", "brightness_temperature_k",
-        "confidence", "source", "resolution_m", "processing_time_utc",
+        "date", "scope", "longitude", "latitude", "brightness_ti4_k",
+        "brightness_ti5_k", "confidence", "source", "resolution_m",
+        "processing_time_utc",
     ]
     with OUTPUT.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"FIRMS images processed: {len(image_info)}")
+    print(f"VIIRS collections processed: {', '.join(COLLECTIONS)}")
+    print(f"VIIRS images processed: {total_images}")
     print(f"Wrote {len(rows)} hotspot records to {OUTPUT}")
 
 
