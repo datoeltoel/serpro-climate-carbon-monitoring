@@ -1,8 +1,4 @@
-"""Earth Engine rainfall query for SERPRO scopes.
-
-The script is intentionally separated from Streamlit. GitHub Actions can run it
-on a schedule and write a small processed CSV that the public app reads.
-"""
+"""Earth Engine rainfall query for SERPRO scopes."""
 from __future__ import annotations
 
 import csv
@@ -43,8 +39,27 @@ def authenticate_ee() -> None:
         )
 
     private_key = info["private_key"]
-    if "BEGIN PRIVATE KEY" not in private_key or "END PRIVATE KEY" not in private_key:
-        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON does not contain a valid private key block.")
+    normalized_key = private_key.strip()
+    if "..." in normalized_key:
+        raise RuntimeError(
+            "EE_SERVICE_ACCOUNT_JSON contains placeholder text ('...') in private_key. "
+            "Paste the complete original JSON key downloaded from Google Cloud."
+        )
+    if not normalized_key.startswith("-----BEGIN PRIVATE KEY-----"):
+        raise RuntimeError(
+            "EE_SERVICE_ACCOUNT_JSON private_key does not start with the expected PEM header. "
+            "Use the original service-account JSON downloaded from Google Cloud."
+        )
+    if not normalized_key.endswith("-----END PRIVATE KEY-----"):
+        raise RuntimeError(
+            "EE_SERVICE_ACCOUNT_JSON private_key does not contain the expected PEM footer. "
+            "Use the original service-account JSON downloaded from Google Cloud."
+        )
+    if len(normalized_key) < 500:
+        raise RuntimeError(
+            "EE_SERVICE_ACCOUNT_JSON private_key appears truncated. "
+            "Paste the complete original JSON key from Google Cloud."
+        )
 
     credentials = service_account.Credentials.from_service_account_info(
         info,
@@ -59,7 +74,9 @@ def project_area_geometry() -> ee.Geometry:
     with gzip.open(PROJECT_AREA_KML, "rb") as fh:
         root = ET.fromstring(fh.read())
     polygons = []
-    for node in root.findall(".//kml:Polygon/kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS):
+    for node in root.findall(
+        ".//kml:Polygon/kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS
+    ):
         coords = []
         for item in (node.text or "").split():
             p = item.split(",")
@@ -104,13 +121,15 @@ def fetch_day(date_value, scopes):
     image = ee.Image(collection.mean())
     rows = []
     for scope_name, geometry in scopes.items():
-        rows.append({
-            "date": date_value.strftime("%Y-%m-%d"),
-            "scope": scope_name,
-            "rainfall_mm": zonal_mean(image, geometry),
-            "source": COLLECTION,
-            "processing_time_utc": datetime.now(timezone.utc).isoformat(),
-        })
+        rows.append(
+            {
+                "date": date_value.strftime("%Y-%m-%d"),
+                "scope": scope_name,
+                "rainfall_mm": zonal_mean(image, geometry),
+                "source": COLLECTION,
+                "processing_time_utc": datetime.now(timezone.utc).isoformat(),
+            }
+        )
     return rows
 
 
