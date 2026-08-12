@@ -1,0 +1,8 @@
+{
+  "source": "MODIS/061/MCD64A1",
+  "period": "2016-2025",
+  "cadence": "monthly source aggregated to annual burned area",
+  "resolution_m": 500,
+  "method": "sum pixel area where BurnDate > 0 and QA land + valid bits are set",
+  "note": "Ten complete calendar years; 2026 is excluded because the current year is incomplete."
+}
