@@ -2,6 +2,15 @@
 
 Climate intelligence and spatial monitoring platform for the **Seruyan Restoration Ecosystem Project (SERPRO)** by PT Kalamanthana Alam Lestari.
 
+## Boundary model
+
+The WebGIS explicitly separates two official spatial layers:
+
+- **SERPRO Project Area (Concession)** — the full PT Kalamanthana Alam Lestari concession / project area from `KAL_Boundary_Split.kml`.
+- **SERPRO Carbon Project Zone** — the carbon project boundary supplied in `ProjectZone.kmz`.
+
+Carbon/MRV metrics should default to the **Carbon Project Zone** unless a metric is explicitly labelled as concession / Project Area level.
+
 ## MVP
 
 The first release focuses on:
@@ -14,7 +23,7 @@ The first release focuses on:
 - 🚨 Alert center
 - 📊 Climate Risk Index prototype
 
-> **Current status:** UI/UX and application architecture are in MVP stage. Values and map layers are demo data and are not official project measurements.
+> **Current status:** UI/UX and application architecture are in MVP stage. Monitoring values are demo data; the two WebGIS boundary layers are official project inputs supplied for this application.
 
 ## Architecture
 
@@ -43,7 +52,7 @@ Public climate / satellite data
 │   ├── map.py
 │   └── ui.py
 ├── data/
-│   ├── static/
+│   ├── static/boundaries/
 │   └── processed/
 ├── scripts/
 ├── .github/workflows/
@@ -57,7 +66,7 @@ Public climate / satellite data
 2. ERA5-Land — temperature / climate variables
 3. VIIRS — near-real-time fire hotspots
 4. Sentinel-2 — vegetation indices
-5. Official project boundary and monitoring points
+5. Monitoring points
 6. Automated data refresh through GitHub Actions
 
 ## Run locally
