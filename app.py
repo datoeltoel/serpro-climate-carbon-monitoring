@@ -26,7 +26,7 @@ scope = st.radio(
 )
 
 scope_label = {
-    "All Boundaries": "All official boundaries",
+    "All Boundaries": "Unified SERPRO project landscape",
     "SERPRO Project Area": "SERPRO concession / project area",
     "Carbon Project Zone": "SERPRO carbon project zone",
 }[scope]
@@ -46,7 +46,7 @@ for col, (label, value, delta) in zip(cols, metrics):
     with col:
         st.markdown(f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="metric-delta">{delta}</div></div>', unsafe_allow_html=True)
 
-st.caption(f"Active scope: **{scope_label}** · Carbon Project Zone area: **{project_zone_area_ha:,.2f} ha**")
+st.caption(f"Active scope: **{scope_label}** · Project Area: **{project_area_ha:,.2f} ha** · Carbon Project Zone: **{project_zone_area_ha:,.2f} ha**")
 
 st.markdown('<div class="section-title">Project WebGIS & Climate Risk</div>', unsafe_allow_html=True)
 map_col, risk_col = st.columns([2.1, 1])
@@ -78,4 +78,4 @@ for _, alert in data["alerts"].iterrows():
     cls = "alert-high" if priority == "HIGH" else "alert-medium" if priority == "MEDIUM" else "alert-low"
     st.markdown(f'<div class="{cls}"><b>{alert["Type"]}</b> · {alert["Location"]} · {alert["Date"]} · <b>{priority}</b></div>', unsafe_allow_html=True)
 
-st.caption("Boundary note: SERPRO Project Area uses KAL_Boundary_Split.kml; SERPRO Carbon Project Zone uses ProjectZone.kmz. Boundary areas are official project inputs. Monitoring indicators remain demo values until live spatial datasets are connected and filtered by the selected scope.")
+st.caption("Boundary note: SERPRO Project Area uses KAL_Boundary_Split.kml; SERPRO Carbon Project Zone uses ProjectZone.kmz. They are spatially overlapping components of the same unified SERPRO project landscape. Monitoring indicators remain demo values until live spatial datasets are connected and filtered by the selected scope.")
