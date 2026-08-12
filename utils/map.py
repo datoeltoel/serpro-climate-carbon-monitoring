@@ -7,71 +7,108 @@ import folium
 from folium.plugins import Fullscreen
 
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
-BOUNDARY_PATH = Path("data/static/project_boundary.kml.gz")
+PROJECT_AREA_SOURCE = Path("data/static/project_boundary.kml.gz")
+CARBON_PROJECT_ZONE = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 
 
-def load_project_boundary(path=BOUNDARY_PATH):
-    """Read the preserved SERPRO KML source and convert polygons to GeoJSON."""
+def load_project_area(path=PROJECT_AREA_SOURCE):
+    """Load the official KAL concession / SERPRO Project Area source KML."""
     if not path.exists():
-        return None
+        return {"type": "FeatureCollection", "features": []}
 
     with gzip.open(path, "rb") as f:
         root = ET.fromstring(f.read())
 
     features = []
     for placemark in root.findall(".//kml:Placemark", KML_NS):
-        name = placemark.findtext("kml:name", default="Project Block", namespaces=KML_NS)
-        polygons = []
+        name = placemark.findtext("kml:name", default="Project Area Block", namespaces=KML_NS)
         for ring in placemark.findall(".//kml:Polygon/kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS):
             coords = []
             for item in (ring.text or "").split():
                 parts = item.split(",")
                 if len(parts) >= 2:
                     coords.append([float(parts[0]), float(parts[1])])
-            if coords:
-                polygons.append([coords])
-
-        if not polygons:
-            continue
-
-        geometry = polygons[0] if len(polygons) == 1 else {
-            "type": "MultiPolygon",
-            "coordinates": polygons,
-        }
-        if len(polygons) == 1:
-            geometry = {"type": "Polygon", "coordinates": polygons[0]}
-
-        features.append({
-            "type": "Feature",
-            "properties": {"Name": name},
-            "geometry": geometry,
-        })
+            if len(coords) >= 4:
+                features.append({
+                    "type": "Feature",
+                    "properties": {
+                        "name": name,
+                        "boundary_role": "project_area_concession",
+                    },
+                    "geometry": {"type": "Polygon", "coordinates": [coords]},
+                })
 
     return {"type": "FeatureCollection", "features": features}
 
 
+def load_carbon_project_zone(path=CARBON_PROJECT_ZONE):
+    """Load the official SERPRO Carbon Project Zone web geometry."""
+    if not path.exists():
+        return {"type": "FeatureCollection", "features": []}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _bounds_from_geojson(collection):
+    points = []
+    for feature in collection.get("features", []):
+        geometry = feature.get("geometry") or {}
+        coords = geometry.get("coordinates", [])
+        if geometry.get("type") == "Polygon":
+            rings = coords
+        elif geometry.get("type") == "MultiPolygon":
+            rings = [ring for polygon in coords for ring in polygon]
+        else:
+            rings = []
+        for ring in rings:
+            points.extend(ring)
+    if not points:
+        return None
+    lons = [p[0] for p in points]
+    lats = [p[1] for p in points]
+    return [[min(lats), min(lons)], [max(lats), max(lons)]]
+
+
 def render_map(hotspots, monitoring_points):
+    """Render the official two-boundary SERPRO WebGIS with monitoring overlays."""
+    project_area = load_project_area()
+    project_zone = load_carbon_project_zone()
+
     m = folium.Map(
-        location=[-3.085, 112.62],
-        zoom_start=10,
+        location=[-3.10, 112.62],
+        zoom_start=9,
         tiles="CartoDB positron",
         control_scale=True,
     )
     Fullscreen().add_to(m)
 
-    boundary = load_project_boundary()
-    if boundary:
+    if project_area["features"]:
         folium.GeoJson(
-            boundary,
-            name="🟢 SERPRO Project Boundary",
+            project_area,
+            name="🟢 SERPRO Project Area (Concession)",
             style_function=lambda _: {
-                "color": "#0B5D3B",
-                "weight": 3,
+                "color": "#146B43",
+                "weight": 2.5,
                 "fillColor": "#2E7D32",
+                "fillOpacity": 0.04,
+            },
+            highlight_function=lambda _: {"weight": 4, "fillOpacity": 0.09},
+            tooltip=folium.GeoJsonTooltip(fields=["name"], aliases=["Block"]),
+        ).add_to(m)
+
+    if project_zone["features"]:
+        folium.GeoJson(
+            project_zone,
+            name="🟣 SERPRO Carbon Project Zone",
+            style_function=lambda _: {
+                "color": "#6A4C93",
+                "weight": 3,
+                "fillColor": "#9B7EBD",
                 "fillOpacity": 0.08,
             },
-            highlight_function=lambda _: {"weight": 4, "fillOpacity": 0.12},
-            tooltip=folium.GeoJsonTooltip(fields=["Name"], aliases=["Block"]),
+            highlight_function=lambda _: {"weight": 4.5, "fillOpacity": 0.14},
+            tooltip=folium.GeoJsonTooltip(
+                fields=["name"], aliases=["Boundary"]
+            ),
         ).add_to(m)
 
     hotspot_group = folium.FeatureGroup(name="🔥 VIIRS Hotspots")
@@ -98,6 +135,18 @@ def render_map(hotspots, monitoring_points):
             icon=folium.Icon(color="green", icon="tint", prefix="fa"),
         ).add_to(point_group)
     point_group.add_to(m)
+
+    bounds = _bounds_from_geojson(project_area)
+    zone_bounds = _bounds_from_geojson(project_zone)
+    if bounds and zone_bounds:
+        bounds = [
+            [min(bounds[0][0], zone_bounds[0][0]), min(bounds[0][1], zone_bounds[0][1])],
+            [max(bounds[1][0], zone_bounds[1][0]), max(bounds[1][1], zone_bounds[1][1])],
+        ]
+    else:
+        bounds = bounds or zone_bounds
+    if bounds:
+        m.fit_bounds(bounds, padding=(20, 20))
 
     folium.LayerControl(collapsed=False).add_to(m)
     return m
