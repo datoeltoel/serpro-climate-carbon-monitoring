@@ -28,8 +28,24 @@ def authenticate_ee() -> None:
     cloud_project = os.environ.get("EE_PROJECT_ID")
     if not key_json or not cloud_project:
         raise RuntimeError("Set EE_SERVICE_ACCOUNT_JSON and EE_PROJECT_ID GitHub secrets.")
-    info = json.loads(key_json)
-    credentials = ee.ServiceAccountCredentials(info["client_email"], key_data=key_json)
+
+    try:
+        info = json.loads(key_json)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON is not valid JSON. Paste the complete Google service-account JSON file.") from exc
+
+    client_email = info.get("client_email")
+    private_key = info.get("private_key")
+    if not client_email or not private_key:
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON must contain client_email and private_key.")
+    if "BEGIN PRIVATE KEY" not in private_key or "END PRIVATE KEY" not in private_key:
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON does not contain a valid PEM private key. Use the JSON file downloaded from Google Cloud, not a template.")
+    if "..." in private_key:
+        raise RuntimeError("EE_SERVICE_ACCOUNT_JSON appears to contain placeholder text (...) instead of the real private key. Replace it with the original downloaded JSON key.")
+
+    # Earth Engine expects the service-account email and the private-key material,
+    # not the entire JSON document as key_data.
+    credentials = ee.ServiceAccountCredentials(client_email, key_data=private_key)
     ee.Initialize(credentials, project=cloud_project)
 
 
@@ -45,13 +61,17 @@ def project_area_geometry() -> ee.Geometry:
                 coords.append([float(p[0]), float(p[1])])
         if len(coords) >= 4:
             polygons.append(ee.Geometry.Polygon(coords))
+    if not polygons:
+        raise RuntimeError("No valid polygons found in Project Area KML.")
     return ee.Geometry.MultiPolygon(polygons) if len(polygons) > 1 else polygons[0]
 
 
 def project_zone_geometry() -> ee.Geometry:
     obj = json.loads(PROJECT_ZONE_GEOJSON.read_text(encoding="utf-8"))
-    feature = obj["features"][0]
-    return ee.Geometry(feature["geometry"])
+    features = obj.get("features", [])
+    if not features:
+        raise RuntimeError("Carbon Project Zone GeoJSON contains no features.")
+    return ee.Geometry(features[0]["geometry"])
 
 
 def zonal_mean(image: ee.Image, geometry: ee.Geometry) -> float:
@@ -70,6 +90,20 @@ def fetch_day(date_value, scopes):
     start = ee.Date(date_value.strftime("%Y-%m-%d"))
     end = start.advance(1, "day")
     collection = ee.ImageCollection(COLLECTION).filterDate(start, end).select("precipitation")
+    count = collection.size().getInfo()
+    if count == 0:
+        return [
+            {
+                "date": date_value.strftime("%Y-%m-%d"),
+                "scope": scope_name,
+                "rainfall_mm": "",
+                "source": COLLECTION,
+                "processing_time_utc": datetime.now(timezone.utc).isoformat(),
+                "status": "no_data",
+            }
+            for scope_name in scopes
+        ]
+
     image = ee.Image(collection.mean())
     rows = []
     for scope_name, geometry in scopes.items():
@@ -79,6 +113,7 @@ def fetch_day(date_value, scopes):
             "rainfall_mm": zonal_mean(image, geometry),
             "source": COLLECTION,
             "processing_time_utc": datetime.now(timezone.utc).isoformat(),
+            "status": "ok",
         })
     return rows
 
