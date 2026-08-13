@@ -2,6 +2,11 @@ name: Update SERPRO Spatial Vegetation
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - "scripts/update_vegetation_spatial.py"
+      - ".github/workflows/update_vegetation_spatial.yml"
+      - "data/static/project_boundary.kml.gz"
   schedule:
     - cron: "45 3 * * *" # 10:45 WIB daily
 
