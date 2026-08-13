@@ -2,48 +2,62 @@ import streamlit as st
 
 
 def setup_page():
-    st.set_page_config(page_title="SERPRO Climate & Carbon Monitoring", page_icon="🌿", layout="wide", initial_sidebar_state="expanded")
-    st.markdown("""
-    <style>
-    .block-container {padding-top: 2.2rem; padding-bottom: 2rem; max-width: 1500px;}
-    [data-testid="stSidebar"] {background: #09231A;}
-    [data-testid="stSidebar"] * {color: #F4F7F5;}
-    .brand {display:block; width:100%; overflow:visible!important; position:relative; z-index:2; font-size:1.55rem; line-height:1.35; font-weight:700; color:#0B5D3B; margin:0 0 2px 0; padding:0;}
-    .prototype-badge {display:inline-block; margin-left:10px; padding:3px 8px; border-radius:999px; background:#E8F2EE; color:#0B5D3B; border:1px solid #BFD8CC; font-size:.62rem; font-weight:800; letter-spacing:.08em; vertical-align:middle;}
-    .subtitle {display:block; width:100%; overflow:visible!important; font-size:.92rem; line-height:1.45; color:#66756E; margin:0 0 .55rem 0; padding:0;}
-    .status {font-size:.78rem; line-height:1.4; color:#4E665B; text-align:right; margin-bottom:10px;}
-    .metric-card {background:#FFFFFF; border:1px solid #E4EAE7; border-radius:14px; padding:16px 18px; min-height:105px; box-shadow:0 1px 3px rgba(0,0,0,.04);}
-    .metric-label {font-size:.78rem; color:#66756E; text-transform:uppercase; letter-spacing:.04em;}
-    .metric-value {font-size:1.7rem; font-weight:700; color:#12382A; margin-top:5px;}
-    .metric-delta {font-size:.78rem; color:#4B7A64; margin-top:3px;}
-    .section-title {font-size:1.1rem; font-weight:700; color:#173D2D; margin:12px 0 6px;}
-    .landscape-summary {background:#FFFFFF; border:1px solid #E1E8E4; border-radius:16px; padding:18px 20px; box-shadow:0 1px 3px rgba(0,0,0,.035); margin-bottom:12px;}
-    .landscape-intro {color:#53665D; font-size:.9rem; line-height:1.5; margin-bottom:14px;}
-    .landscape-grid {display:grid; grid-template-columns:1fr 120px 1fr; align-items:center; gap:14px;}
-    .landscape-card {border-radius:13px; padding:15px 17px; min-height:118px; border:1px solid #E2E8E5;}
-    .area-card {background:#F5FAF7; border-left:5px solid #146B43;}
-    .zone-card {background:#F8F6FC; border-left:5px solid #6A4C93;}
-    .landscape-icon {font-size:1.1rem; margin-bottom:4px;}
-    .landscape-label {font-size:.82rem; font-weight:700; color:#40574C; text-transform:uppercase; letter-spacing:.03em;}
-    .landscape-value {font-size:1.75rem; font-weight:800; color:#173D2D; margin-top:4px;}
-    .landscape-meta {font-size:.74rem; color:#728079; margin-top:3px; line-height:1.35;}
-    .landscape-connector {text-align:center; color:#6A4C93; font-size:2rem; font-weight:700; line-height:1;}
-    .landscape-connector span {display:block; color:#68776F; font-size:.62rem; letter-spacing:.07em; line-height:1.25; margin-top:5px;}
-    .landscape-note {font-size:.72rem; color:#7A8781; margin-top:12px; padding-top:10px; border-top:1px solid #EDF1EF;}
-    .risk-card {background:#12382A; color:white; border-radius:16px; padding:20px; min-height:260px;}
-    .risk-number {font-size:3.1rem; font-weight:800; line-height:1; margin:12px 0 3px;}
-    .risk-label {font-size:1rem; font-weight:700; letter-spacing:.04em;}
-    .alert-high {border-left:5px solid #D32F2F; background:#FFF7F7; padding:9px 12px; border-radius:6px; margin:5px 0;}
-    .alert-medium {border-left:5px solid #F9A825; background:#FFFCF2; padding:9px 12px; border-radius:6px; margin:5px 0;}
-    .alert-low {border-left:5px solid #4C8BF5; background:#F5F9FF; padding:9px 12px; border-radius:6px; margin:5px 0;}
-    @media (max-width: 800px) {
-      .block-container {padding-top:1.5rem;}
-      .brand {font-size:1.25rem; line-height:1.35;}
-      .subtitle {font-size:.84rem;}
-      .prototype-badge {font-size:.55rem; padding:2px 7px;}
-      .landscape-grid {grid-template-columns:1fr; gap:8px;}
-      .landscape-connector {font-size:1.5rem;}
-      .landscape-connector span {display:inline; margin-left:6px;}
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    st.set_page_config(
+        page_title="SERPRO Climate & Carbon Monitoring",
+        page_icon="🌿",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+    st.markdown(
+        """
+        <style>
+        :root { --green:#0B5D3B; --dark:#062A20; --mint:#EAF7F0; --ink:#13251F; --muted:#68776F; --line:#DCE6E1; }
+        .stApp { background:#F6F8F7; color:var(--ink); }
+        .block-container { padding-top:1.25rem; padding-bottom:1.5rem; max-width:1700px; }
+        [data-testid="stSidebar"] { background:linear-gradient(180deg,#05251D 0%,#073126 100%); }
+        [data-testid="stSidebar"] * { color:#F3F8F5; }
+        [data-testid="stSidebar"] .stButton button { background:#1A6A45; border:none; color:white; }
+        .app-header { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:10px; }
+        .brand { font-size:1.65rem; line-height:1.15; font-weight:800; color:#073A2B; margin:0; }
+        .prototype-badge { display:inline-block; margin-left:10px; padding:4px 9px; border-radius:999px; background:#EEF8F2; color:#0B5D3B; border:1px solid #BFD8CC; font-size:.58rem; font-weight:800; letter-spacing:.09em; vertical-align:middle; }
+        .subtitle { color:#718078; font-size:.88rem; margin-top:4px; }
+        .top-status { display:flex; align-items:center; gap:10px; color:#384A43; font-size:.8rem; }
+        .status-pill { background:#E7F6EC; color:#167447; padding:6px 10px; border-radius:999px; font-weight:700; }
+        .kpi-card { background:#FFFFFF; border:1px solid var(--line); border-radius:16px; padding:14px 15px 11px; min-height:146px; box-shadow:0 3px 12px rgba(17,40,30,.05); }
+        .kpi-top { display:flex; align-items:center; gap:9px; color:#4E625A; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
+        .kpi-icon { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.15rem; background:#EEF5F2; }
+        .kpi-value { font-size:1.65rem; font-weight:800; margin-top:8px; color:#13251F; }
+        .kpi-sub { font-size:.72rem; color:#6C7A74; margin-top:1px; }
+        .kpi-delta { font-size:.74rem; margin-top:8px; font-weight:700; }
+        .delta-up { color:#12814F; } .delta-warn { color:#D97706; } .delta-bad { color:#C62828; }
+        .panel { background:#FFFFFF; border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 3px 12px rgba(17,40,30,.05); }
+        .panel-title { font-size:.95rem; font-weight:800; color:#13251F; margin-bottom:5px; }
+        .panel-sub { font-size:.72rem; color:#75827D; margin-bottom:8px; }
+        .map-panel { background:#FFFFFF; border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 3px 12px rgba(17,40,30,.05); }
+        .map-title-badge { position:relative; z-index:10; margin:10px; padding:6px 9px; background:rgba(8,48,36,.84); color:white; border-radius:8px; display:inline-block; font-size:.72rem; font-weight:800; letter-spacing:.04em; }
+        .risk-panel { background:linear-gradient(180deg,#F8FCFA 0%,#FFFFFF 100%); border:1px solid var(--line); border-radius:16px; padding:18px; min-height:100%; box-shadow:0 3px 12px rgba(17,40,30,.05); }
+        .risk-score { font-size:3rem; font-weight:900; color:#12382A; line-height:1; margin-top:6px; }
+        .risk-label { font-size:1rem; font-weight:800; color:#C62828; margin-top:4px; }
+        .risk-track { height:12px; border-radius:99px; background:linear-gradient(90deg,#31A56B 0%,#F2C14E 48%,#F59E0B 70%,#E63B2E 100%); position:relative; margin:18px 0 12px; }
+        .risk-marker { position:absolute; top:-6px; width:4px; height:24px; background:#7A1620; border-radius:4px; }
+        .risk-row { display:flex; justify-content:space-between; font-size:.76rem; margin:8px 0; color:#5B6A63; }
+        .risk-row strong { color:#1C2B25; }
+        .trend-card { background:#FFFFFF; border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 3px 12px rgba(17,40,30,.05); }
+        .trend-stat { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:#E8EFEB; border-radius:10px; overflow:hidden; margin-top:8px; }
+        .trend-stat > div { background:#FBFDFC; padding:8px 10px; } .trend-stat-label { font-size:.66rem; color:#7A8781; } .trend-stat-value { font-size:.9rem; font-weight:800; margin-top:2px; color:#173D2D; }
+        .alert-list { background:#FFFFFF; border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 3px 12px rgba(17,40,30,.05); }
+        .alert-item { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:11px 0; border-bottom:1px solid #EEF2F0; }
+        .alert-item:last-child { border-bottom:none; }
+        .alert-title { font-size:.8rem; font-weight:800; color:#1F3029; } .alert-meta { font-size:.7rem; color:#738079; margin-top:2px; }
+        .alert-badge { font-size:.64rem; font-weight:800; padding:5px 8px; border-radius:999px; }
+        .badge-high { background:#FDEBEC; color:#C62828; } .badge-moderate { background:#FFF5D9; color:#B26A00; } .badge-low { background:#EAF3FF; color:#245B9B; }
+        .side-project-card { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:14px; margin-top:14px; }
+        .side-project-title { font-weight:800; font-size:.85rem; margin-bottom:9px; } .side-project-row { margin:7px 0; } .side-project-label { font-size:.65rem; opacity:.7; text-transform:uppercase; letter-spacing:.06em; } .side-project-value { font-size:.8rem; font-weight:700; margin-top:1px; }
+        .footer-bar { background:#062A20; color:white; border-radius:14px; padding:12px 16px; font-size:.72rem; margin-top:10px; }
+        .footer-grid { display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:14px; align-items:center; } .footer-item span { opacity:.65; display:block; margin-bottom:3px; font-size:.63rem; text-transform:uppercase; letter-spacing:.06em; }
+        div[data-testid="stMetric"] { background:#FFFFFF; border:1px solid var(--line); border-radius:14px; padding:10px; }
+        @media(max-width:900px){ .app-header{display:block}.top-status{margin-top:8px}.footer-grid{grid-template-columns:1fr 1fr;} }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
