@@ -1,10 +1,12 @@
 """Load processed Sentinel-2 vegetation index data."""
 from pathlib import Path
+import json
 import pandas as pd
 
 NDMI_PATH = Path("data/processed/climate/vegetation/ndmi_daily.csv")
 NDVI_PATH = Path("data/processed/climate/vegetation/ndvi_daily.csv")
 NDVI_ANNUAL_PATH = Path("data/processed/climate/vegetation/ndvi_annual_2015_2025.csv")
+VEGETATION_SPATIAL_PATH = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
 
 
 def _load(path: Path, value_col: str) -> pd.DataFrame:
@@ -34,3 +36,13 @@ def load_ndvi_annual() -> pd.DataFrame:
         return pd.DataFrame(columns=["year", "scope", "ndvi_mean", "observation_count", "source", "note"])
     df = pd.read_csv(NDVI_ANNUAL_PATH)
     return df.dropna(subset=["year", "scope", "ndvi_mean"]).sort_values(["year", "scope"])
+
+
+def load_vegetation_spatial() -> dict:
+    """Return the latest actual Sentinel-2 spatial vegetation GeoJSON."""
+    if not VEGETATION_SPATIAL_PATH.exists():
+        return {"type": "FeatureCollection", "features": []}
+    try:
+        return json.loads(VEGETATION_SPATIAL_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"type": "FeatureCollection", "features": []}
