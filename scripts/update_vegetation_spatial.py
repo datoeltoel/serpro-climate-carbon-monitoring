@@ -18,7 +18,6 @@ from google.oauth2 import service_account
 
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 PROJECT_AREA_KML = Path("data/static/project_boundary.kml.gz")
-PROJECT_ZONE_GEOJSON = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 OUTPUT = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
 S2 = "COPERNICUS/S2_SR_HARMONIZED"
 LOOKBACK_DAYS = 30
@@ -119,8 +118,12 @@ def main() -> None:
                 "ndvi": ndvi,
                 "ndmi": ndmi,
                 "stress": stress,
+                "composite_start": start.isoformat(),
+                "composite_end": (end - timedelta(days=1)).isoformat(),
                 "period_days": LOOKBACK_DAYS,
                 "scene_count": count,
+                "resolution_m": GRID_SCALE_M,
+                "composite_method": "30-day median",
                 "source": S2,
                 "updated_utc": datetime.now(timezone.utc).isoformat(),
             },
