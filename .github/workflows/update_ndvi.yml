@@ -1,0 +1,46 @@
+name: Update SERPRO NDVI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * *" # 10:30 WIB daily
+
+permissions:
+  contents: write
+
+concurrency:
+  group: serpro-ndvi-main
+  cancel-in-progress: false
+
+jobs:
+  ndvi:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Update NDVI
+        env:
+          EE_SERVICE_ACCOUNT_JSON: ${{ secrets.EE_SERVICE_ACCOUNT_JSON }}
+          EE_PROJECT_ID: ${{ secrets.EE_PROJECT_ID }}
+        run: python scripts/update_ndvi.py
+
+      - name: Commit NDVI data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/processed/climate/vegetation/ndvi_daily.csv
+          git diff --cached --quiet || git commit -m "data: update SERPRO NDVI"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
