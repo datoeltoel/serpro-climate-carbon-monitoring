@@ -1,28 +1,36 @@
-"""Build spatial Sentinel-2 vegetation status for the SERPRO Carbon Project Zone.
+"""Build spatial Sentinel-2 vegetation status for the SERPRO Project Area.
 
 Analysis is performed at native Sentinel-2 10 m scale in WGS 84 / UTM 49S.
 The web GeoJSON uses a lighter display grid so the Streamlit map remains fast.
 
+Boundary policy:
+- Project Area is the analytical boundary for vegetation metrics.
+- Carbon Project Zone remains a contextual/reference boundary in the UI.
+
 Coverage strategy:
 1. Direct Sentinel-2 observation inside the requested period.
-2. Temporal fallback from an expanded 60/90/180/365-day window when needed.
+2. Temporal fallback from an expanded 90/180/365-day window when needed.
 3. Spatial gap filling with neighbourhood interpolation, followed by a regional
    mean only for residual isolated gaps.
 
-All estimated pixels are explicitly labelled in the quality metadata; 100%
-map coverage therefore does not mean 100% direct observation.
+Estimated pixels are explicitly labelled in quality metadata. Interpolation is
+used only inside the Project Area and is never used to manufacture coverage for
+the wider Carbon Project Zone.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import os
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import ee
 from google.oauth2 import service_account
 
-ZONE_GEOJSON = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
+PROJECT_AREA_SOURCE = Path("data/static/project_boundary.kml.gz")
+CARBON_PROJECT_ZONE_SOURCE = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 OUTPUT = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
 S2 = "COPERNICUS/S2_SR_HARMONIZED"
 DEFAULT_LOOKBACK_DAYS = 90
@@ -36,6 +44,7 @@ TRANSFORM_ERROR_MARGIN_M = 1
 MIN_COVERAGE_PCT = 90.0
 INTERPOLATION_RADIUS_M = 500
 INTERPOLATION_ITERATIONS = 3
+KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 
 
 def authenticate_ee() -> None:
@@ -50,20 +59,26 @@ def authenticate_ee() -> None:
     ee.Initialize(credentials=credentials, project=cloud_project)
 
 
-def carbon_project_zone_geometry() -> ee.Geometry:
-    if not ZONE_GEOJSON.exists():
-        raise RuntimeError(f"Carbon Project Zone file not found: {ZONE_GEOJSON}")
-    data = json.loads(ZONE_GEOJSON.read_text(encoding="utf-8"))
-    if data.get("type") == "Feature":
-        geometry = data.get("geometry")
-    elif data.get("type") == "FeatureCollection":
-        geoms = [f.get("geometry") for f in data.get("features", []) if f.get("geometry")]
-        if not geoms:
-            raise RuntimeError("No geometry found in Carbon Project Zone GeoJSON.")
-        geometry = geoms[0] if len(geoms) == 1 else {"type": "GeometryCollection", "geometries": geoms}
-    else:
-        geometry = data
-    return ee.Geometry(geometry)
+def project_area_geometry() -> ee.Geometry:
+    """Load the Project Area KML and use all polygon outer rings as one geometry."""
+    if not PROJECT_AREA_SOURCE.exists():
+        raise RuntimeError(f"Project Area file not found: {PROJECT_AREA_SOURCE}")
+    with gzip.open(PROJECT_AREA_SOURCE, "rb") as f:
+        root = ET.fromstring(f.read())
+
+    polygons = []
+    for ring in root.findall(".//kml:Placemark//kml:Polygon/kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS):
+        coords = []
+        for item in (ring.text or "").split():
+            parts = item.split(",")
+            if len(parts) >= 2:
+                coords.append([float(parts[0]), float(parts[1])])
+        if len(coords) >= 4:
+            polygons.append([coords])
+
+    if not polygons:
+        raise RuntimeError("No polygon geometry found in Project Area KML.")
+    return ee.Geometry.MultiPolygon(polygons)
 
 
 def mask_s2(img: ee.Image) -> ee.Image:
@@ -127,7 +142,7 @@ def masked_image() -> ee.Image:
 
 def main() -> None:
     authenticate_ee()
-    region = carbon_project_zone_geometry()
+    region = project_area_geometry()
     end = date.today() + timedelta(days=1)
     requested_days = requested_period_days()
     requested_start = end - timedelta(days=requested_days)
@@ -163,12 +178,13 @@ def main() -> None:
     collection, composite, start, selected_days, count, cloud = selected
     selected_valid = composite.mask().reduce(ee.Reducer.min()).rename("selected_valid")
 
-    # Pixels already observed in the requested period are direct observations.
     observed_mask = selected_valid.And(requested_valid)
-    temporal_mask = selected_valid.And(requested_valid.Not()) if selected_days > requested_days else ee.Image.constant(0).clip(region)
+    temporal_mask = (
+        selected_valid.And(requested_valid.Not())
+        if selected_days > requested_days
+        else ee.Image.constant(0).clip(region)
+    )
 
-    # Fill spatial gaps using a neighbourhood mean. The candidate is masked where
-    # no valid neighbouring pixels exist, so it can be measured separately.
     spatial_candidate = composite.focal_mean(
         radius=INTERPOLATION_RADIUS_M,
         kernelType="circle",
@@ -178,8 +194,6 @@ def main() -> None:
     spatial_candidate_valid = spatial_candidate.mask().reduce(ee.Reducer.min()).rename("spatial_candidate_valid")
     spatial_mask = selected_valid.Not().And(spatial_candidate_valid)
 
-    # Residual isolated gaps are filled from the regional mean. They remain part
-    # of the spatial-interpolation bucket and are explicitly flagged in metadata.
     regional_mean = composite.reduceRegion(
         reducer=ee.Reducer.mean(),
         geometry=region,
@@ -203,15 +217,13 @@ def main() -> None:
     spatial_pct = min(100.0, mask_percentage(spatial_mask, region) + mask_percentage(residual_mask, region))
     total_coverage = mask_percentage(final_valid, region)
 
-    # Keep the reported categories additive and numerically stable after rounding.
     spatial_pct = max(0.0, 100.0 - observed_pct - temporal_pct)
     total_coverage = max(total_coverage, observed_pct + temporal_pct + spatial_pct)
 
-    # Build a complete display grid over the Carbon Project Zone. This keeps the
-    # boundary intact even where the original Sentinel-2 composite had masked cells.
-    grid = region.coveringGrid(
-        ee.Projection(ANALYSIS_CRS).atScale(DISPLAY_GRID_M)
-    ).filterBounds(region)
+    # Complete display grid over Project Area only. Carbon Project Zone is not
+    # rasterized or interpolated because it is a reference boundary, not the
+    # analytical vegetation boundary.
+    grid = region.coveringGrid(ee.Projection(ANALYSIS_CRS).atScale(DISPLAY_GRID_M)).filterBounds(region)
     grid = grid.map(lambda feature: feature.intersection(region, TRANSFORM_ERROR_MARGIN_M))
     result = filled.reduceRegions(
         collection=grid,
@@ -272,7 +284,8 @@ def main() -> None:
                 "composite_method": f"{selected_days}-day median + spatial gap fill",
                 "analysis_crs": ANALYSIS_CRS,
                 "output_crs": OUTPUT_CRS,
-                "boundary": "SERPRO Carbon Project Zone",
+                "boundary": "SERPRO Project Area",
+                "reference_boundary": "SERPRO Carbon Project Zone",
                 "source": S2,
                 "updated_utc": datetime.now(timezone.utc).isoformat(),
             },
@@ -287,7 +300,7 @@ def main() -> None:
         encoding="utf-8",
     )
     print(
-        f"Wrote {len(output_features)} web cells; analysis={ANALYSIS_SCALE_M}m; "
+        f"Wrote {len(output_features)} Project Area web cells; analysis={ANALYSIS_SCALE_M}m; "
         f"display_grid={DISPLAY_GRID_M}m; requested={requested_days}d; "
         f"effective={selected_days}d; scenes={count}; cloud={cloud:.2f}%; "
         f"observed={observed_pct:.2f}%; temporal={temporal_pct:.2f}%; "
