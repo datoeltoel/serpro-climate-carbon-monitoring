@@ -1,8 +1,12 @@
 """Build actual spatial vegetation status from Sentinel-2 SR Harmonized.
 
-Analysis is performed at Sentinel-2's 10 m scale. For a practical web map,
-the 10 m pixels are summarized into a 100 m display grid before GeoJSON export.
-The spatial extent is the SERPRO Carbon Project Zone.
+Analysis is performed at Sentinel-2's native 10 m scale. For a practical web
+map, the 10 m pixels are summarized into a 100 m display grid before GeoJSON
+export. The spatial extent is the official SERPRO Carbon Project Zone.
+
+The requested composite window is attempted first. If there are no valid
+Sentinel-2 scenes after cloud/SCL masking, the workflow automatically expands
+the window to 60 and then 90 days. The output records the actual period used.
 """
 from __future__ import annotations
 
@@ -17,7 +21,8 @@ from google.oauth2 import service_account
 ZONE_GEOJSON = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 OUTPUT = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
 S2 = "COPERNICUS/S2_SR_HARMONIZED"
-LOOKBACK_DAYS = 30
+DEFAULT_LOOKBACK_DAYS = 30
+FALLBACK_WINDOWS_DAYS = [30, 60, 90]
 MAX_CLOUDY_PIXEL_PERCENTAGE = 40
 ANALYSIS_SCALE_M = 10
 DISPLAY_GRID_M = 100
@@ -74,13 +79,8 @@ def add_indices(img: ee.Image) -> ee.Image:
     return img.addBands([ndvi, ndmi])
 
 
-def main() -> None:
-    authenticate_ee()
-    region = carbon_project_zone_geometry()
-    end = date.today() + timedelta(days=1)
-    start = end - timedelta(days=LOOKBACK_DAYS)
-
-    collection = (
+def build_collection(region: ee.Geometry, start: date, end: date) -> ee.ImageCollection:
+    return (
         ee.ImageCollection(S2)
         .filterBounds(region)
         .filterDate(start.isoformat(), end.isoformat())
@@ -88,21 +88,51 @@ def main() -> None:
         .map(mask_s2)
         .map(add_indices)
     )
-    count = int(collection.size().getInfo())
-    if count == 0:
-        raise RuntimeError("No valid Sentinel-2 scenes found for the latest 30 days.")
+
+
+def main() -> None:
+    authenticate_ee()
+    region = carbon_project_zone_geometry()
+    end = date.today() + timedelta(days=1)
+
+    collection = None
+    count = 0
+    selected_days = None
+    start = None
+
+    # Automatic date fallback: 30D -> 60D -> 90D.
+    for lookback_days in FALLBACK_WINDOWS_DAYS:
+        candidate_start = end - timedelta(days=lookback_days)
+        candidate = build_collection(region, candidate_start, end)
+        candidate_count = int(candidate.size().getInfo())
+        if candidate_count > 0:
+            collection = candidate
+            count = candidate_count
+            selected_days = lookback_days
+            start = candidate_start
+            break
+
+    if collection is None or start is None or selected_days is None:
+        raise RuntimeError(
+            "No valid Sentinel-2 scenes found for 30, 60, or 90-day fallback windows."
+        )
 
     composite = collection.median().select(["NDVI", "NDMI"])
 
-    # The source analysis remains at Sentinel-2's native 10 m scale.
-    # A 100 m display grid keeps the web GeoJSON responsive over the large
-    # Carbon Project Zone while preserving the 10 m pixel information in the
-    # aggregation step. A true 10 m vector grid would create millions of cells.
+    # Native analysis stays at 10 m. The 100 m display grid is an aggregation
+    # for web performance; it is NOT a claim that Sentinel-2 resolution is 100 m.
     grid = (
         region
         .coveringGrid(ee.Projection(ANALYSIS_CRS).atScale(DISPLAY_GRID_M))
         .filterBounds(region)
     )
+
+    # Clip every display cell to the official Carbon Project Zone so that the
+    # map follows the real boundary instead of showing rectangular cells outside it.
+    grid = grid.map(
+        lambda feature: feature.intersection(region, TRANSFORM_ERROR_MARGIN_M)
+    )
+
     result = composite.reduceRegions(
         collection=grid,
         reducer=ee.Reducer.mean(),
@@ -145,11 +175,13 @@ def main() -> None:
                 "stress": stress,
                 "composite_start": start.isoformat(),
                 "composite_end": (end - timedelta(days=1)).isoformat(),
-                "period_days": LOOKBACK_DAYS,
+                "period_days": selected_days,
+                "requested_period_days": DEFAULT_LOOKBACK_DAYS,
+                "fallback_used": selected_days != DEFAULT_LOOKBACK_DAYS,
                 "scene_count": count,
                 "analysis_scale_m": ANALYSIS_SCALE_M,
                 "display_grid_m": DISPLAY_GRID_M,
-                "composite_method": "30-day median",
+                "composite_method": "30-day median" if selected_days == 30 else f"{selected_days}-day median fallback",
                 "analysis_crs": ANALYSIS_CRS,
                 "output_crs": OUTPUT_CRS,
                 "boundary": "SERPRO Carbon Project Zone",
@@ -167,9 +199,10 @@ def main() -> None:
         encoding="utf-8",
     )
     print(
-        f"Wrote {len(output_features)} cells: "
-        f"boundary=Carbon Project Zone, analysis={ANALYSIS_SCALE_M}m, "
-        f"display_grid={DISPLAY_GRID_M}m, analysis_crs={ANALYSIS_CRS}, output_crs={OUTPUT_CRS}"
+        f"Wrote {len(output_features)} cells: boundary=Carbon Project Zone, "
+        f"analysis={ANALYSIS_SCALE_M}m, display_grid={DISPLAY_GRID_M}m, "
+        f"period={selected_days}d, scenes={count}, analysis_crs={ANALYSIS_CRS}, "
+        f"output_crs={OUTPUT_CRS}"
     )
 
 
