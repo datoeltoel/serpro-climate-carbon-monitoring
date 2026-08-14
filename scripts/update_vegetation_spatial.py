@@ -23,6 +23,7 @@ S2 = "COPERNICUS/S2_SR_HARMONIZED"
 LOOKBACK_DAYS = 30
 MAX_CLOUDY_PIXEL_PERCENTAGE = 40
 GRID_SCALE_M = 2000
+OUTPUT_CRS = "EPSG:4326"
 
 
 def authenticate_ee() -> None:
@@ -93,6 +94,12 @@ def main() -> None:
         tileScale=4,
     )
 
+    # The grid is created in UTM 50S, but GeoJSON coordinates must be WGS84
+    # longitude/latitude for Leaflet/Folium. Transform geometries before export.
+    result = result.map(
+        lambda feature: feature.setGeometry(feature.geometry().transform(OUTPUT_CRS))
+    )
+
     features = result.getInfo().get("features", [])
     output_features = []
     for feature in features:
@@ -132,8 +139,11 @@ def main() -> None:
     if not output_features:
         raise RuntimeError("Sentinel-2 scenes were found, but no spatial vegetation cells were produced.")
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps({"type": "FeatureCollection", "features": output_features}, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote {len(output_features)} spatial vegetation cells to {OUTPUT}")
+    OUTPUT.write_text(
+        json.dumps({"type": "FeatureCollection", "features": output_features}, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    print(f"Wrote {len(output_features)} spatial vegetation cells to {OUTPUT} in {OUTPUT_CRS}")
 
 
 if __name__ == "__main__":
