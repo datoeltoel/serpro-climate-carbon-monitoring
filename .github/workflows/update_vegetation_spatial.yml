@@ -7,6 +7,7 @@ on:
       - "scripts/update_vegetation_spatial.py"
       - ".github/workflows/update_vegetation_spatial.yml"
       - "data/static/project_boundary.kml.gz"
+      - "data/static/boundaries/**"
   schedule:
     - cron: "45 3 * * *" # 10:45 WIB daily
 
@@ -21,10 +22,11 @@ jobs:
   spatial-vegetation:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout latest main
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -34,20 +36,30 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # Synchronize with the current main branch BEFORE generating the data.
+      # This prevents the generated GeoJSON from being based on a stale commit.
+      - name: Sync main before data generation
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+
       - name: Build spatial vegetation layer
         env:
           EE_SERVICE_ACCOUNT_JSON: ${{ secrets.EE_SERVICE_ACCOUNT_JSON }}
           EE_PROJECT_ID: ${{ secrets.EE_PROJECT_ID }}
         run: python scripts/update_vegetation_spatial.py
 
-      - name: Commit spatial vegetation data
+      - name: Commit and push spatial vegetation data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/processed/climate/vegetation/vegetation_spatial_latest.geojson
-          git diff --cached --quiet || git commit -m "data: update spatial vegetation layer"
-          git fetch origin main
-          git rebase origin/main
+          if git diff --cached --quiet; then
+            echo "No spatial vegetation data changes to commit."
+            exit 0
+          fi
+          git commit -m "data: update spatial vegetation layer"
           git push origin HEAD:main
 
-# Triggered to regenerate the spatial GeoJSON using WGS 84 / UTM 49S analysis and EPSG:4326 output.
+# The spatial analysis itself uses WGS 84 / UTM 49S (EPSG:32749).
+# Web GeoJSON output remains EPSG:4326 for Leaflet/Folium compatibility.
