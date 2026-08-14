@@ -1,8 +1,6 @@
 import gzip
 import json
 import os
-import urllib.parse
-import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -59,62 +57,6 @@ def _bounds_from_geojson(collection):
     return [[min(lats),min(lons)],[max(lats),max(lons)]]
 
 
-def _google_satellite_layer():
-    """Create an official Google Maps Platform satellite 2D tile layer when configured."""
-    try:
-        import streamlit as st
-        api_key = st.secrets.get("GOOGLE_MAPS_API_KEY", None)
-    except Exception:
-        api_key = None
-    api_key = api_key or os.getenv("GOOGLE_MAPS_API_KEY")
-    if not api_key:
-        return None
-    try:
-        payload = json.dumps({
-            "mapType": "satellite",
-            "language": "en-US",
-            "region": "ID",
-            "imageFormat": "png",
-        }).encode("utf-8")
-        url = "https://tile.googleapis.com/v1/createSession?" + urllib.parse.urlencode({"key": api_key})
-        request = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(request, timeout=8) as response:
-            session = json.loads(response.read().decode("utf-8")).get("session")
-        if not session:
-            return None
-        tile_url = "https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?" + urllib.parse.urlencode({"session": session, "key": api_key})
-        return folium.TileLayer(
-            tiles=tile_url,
-            attr="Google Maps Platform",
-            name="Google Satellite",
-            overlay=False,
-            control=True,
-            show=False,
-            max_zoom=20,
-        )
-    except Exception:
-        return None
-
-
-def _add_google_to_map(m):
-    layer = _google_satellite_layer()
-    if layer is not None:
-        layer.add_to(m)
-    return m
-
-
-def _map_with_optional_google(*args, **kwargs):
-    """Preserve Folium's Map API while adding Google Satellite when configured."""
-    m = _ORIGINAL_FOLIUM_MAP(*args, **kwargs)
-    if kwargs.get("tiles") is None:
-        _add_google_to_map(m)
-    return m
-
-
-_ORIGINAL_FOLIUM_MAP = folium.Map
-folium.Map = _map_with_optional_google
-
-
 def _prepare_hotspots(hotspots):
     if hotspots is None or hotspots.empty:
         return pd.DataFrame(), False
@@ -133,15 +75,24 @@ def render_map(hotspots, monitoring_points=None, focus="All Boundaries"):
     project_area=load_project_area(); project_zone=load_carbon_project_zone()
     hotspots, live_mode=_prepare_hotspots(hotspots)
 
+    # Keep folium.Map as the real Folium class. Do not monkey-patch it: the
+    # streamlit-folium component validates the map instance with isinstance().
     m=folium.Map(location=[-3.10,112.62], zoom_start=9, tiles=None, control_scale=True)
-    folium.TileLayer("CartoDB positron", name="Light map", control=True, show=False).add_to(m)
     folium.TileLayer(
-        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Tiles © Esri",
-        name="Satellite imagery · Esri",
+        tiles="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attr="© OpenStreetMap contributors",
+        name="OpenStreetMap",
         overlay=False,
         control=True,
         show=True,
+    ).add_to(m)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Tiles © Esri",
+        name="Satellite imagery · Esri World Imagery",
+        overlay=False,
+        control=True,
+        show=False,
     ).add_to(m)
     Fullscreen().add_to(m)
 
