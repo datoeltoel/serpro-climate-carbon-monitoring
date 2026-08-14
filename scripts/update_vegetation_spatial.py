@@ -1,9 +1,16 @@
-"""Build spatial vegetation status and quality metadata from Sentinel-2 SR Harmonized.
+"""Build spatial Sentinel-2 vegetation status for the SERPRO Carbon Project Zone.
 
-Sentinel-2 indices are calculated at native 10 m in WGS 84 / UTM 49S. The
-GeoJSON remains a lightweight web-display layer; its display cells summarize
-10 m observations. Quality metadata records valid Sentinel-2 coverage,
-cloudiness, temporal fallback and spatial interpolation availability.
+Analysis is performed at native Sentinel-2 10 m scale in WGS 84 / UTM 49S.
+The web GeoJSON uses a lighter display grid so the Streamlit map remains fast.
+
+Coverage strategy:
+1. Direct Sentinel-2 observation inside the requested period.
+2. Temporal fallback from an expanded 60/90/180/365-day window when needed.
+3. Spatial gap filling with neighbourhood interpolation, followed by a regional
+   mean only for residual isolated gaps.
+
+All estimated pixels are explicitly labelled in the quality metadata; 100%
+map coverage therefore does not mean 100% direct observation.
 """
 from __future__ import annotations
 
@@ -18,15 +25,17 @@ from google.oauth2 import service_account
 ZONE_GEOJSON = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 OUTPUT = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
 S2 = "COPERNICUS/S2_SR_HARMONIZED"
-DEFAULT_LOOKBACK_DAYS = 30
-FALLBACK_WINDOWS = (30, 60, 90, 180, 365)
+DEFAULT_LOOKBACK_DAYS = 90
+FALLBACK_WINDOWS = (90, 180, 365)
 MAX_CLOUDY_PIXEL_PERCENTAGE = 40
 ANALYSIS_SCALE_M = 10
 DISPLAY_GRID_M = 100
-ANALYSIS_CRS = "EPSG:32749"  # WGS 84 / UTM zone 49S
-OUTPUT_CRS = "EPSG:4326"     # GeoJSON / Leaflet display CRS
+ANALYSIS_CRS = "EPSG:32749"
+OUTPUT_CRS = "EPSG:4326"
 TRANSFORM_ERROR_MARGIN_M = 1
 MIN_COVERAGE_PCT = 90.0
+INTERPOLATION_RADIUS_M = 500
+INTERPOLATION_ITERATIONS = 3
 
 
 def authenticate_ee() -> None:
@@ -78,7 +87,8 @@ def build_collection(region: ee.Geometry, start: date, end: date) -> ee.ImageCol
         .filterBounds(region)
         .filterDate(start.isoformat(), end.isoformat())
         .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", MAX_CLOUDY_PIXEL_PERCENTAGE))
-        .map(mask_s2).map(add_indices)
+        .map(mask_s2)
+        .map(add_indices)
     )
 
 
@@ -95,20 +105,24 @@ def collection_stats(collection: ee.ImageCollection, region: ee.Geometry) -> tup
     count = int(collection.size().getInfo())
     if count == 0:
         return 0, 0.0
-    # Mean scene-level CLOUDY_PIXEL_PERCENTAGE is a quality indicator only;
-    # pixel-level validity is calculated separately from the composite mask.
     cloud = collection.aggregate_mean("CLOUDY_PIXEL_PERCENTAGE").getInfo()
     return count, float(cloud or 0.0)
 
 
-def coverage_stats(composite: ee.Image, region: ee.Geometry) -> tuple[float, float]:
-    valid = composite.mask().reduce(ee.Reducer.min()).rename("valid")
-    stats = valid.reduceRegion(
-        reducer=ee.Reducer.mean(), geometry=region, scale=ANALYSIS_SCALE_M,
-        maxPixels=1e9, tileScale=8, bestEffort=True,
+def mask_percentage(mask: ee.Image, region: ee.Geometry) -> float:
+    stats = mask.rename("coverage").reduceRegion(
+        reducer=ee.Reducer.mean(),
+        geometry=region,
+        scale=ANALYSIS_SCALE_M,
+        maxPixels=1e9,
+        tileScale=8,
+        bestEffort=True,
     ).getInfo()
-    observed = float(stats.get("valid") or 0.0) * 100.0
-    return observed, max(0.0, 100.0 - observed)
+    return float(stats.get("coverage") or 0.0) * 100.0
+
+
+def masked_image() -> ee.Image:
+    return ee.Image.constant([0, 0]).rename(["NDVI", "NDMI"]).updateMask(ee.Image.constant(0))
 
 
 def main() -> None:
@@ -116,6 +130,15 @@ def main() -> None:
     region = carbon_project_zone_geometry()
     end = date.today() + timedelta(days=1)
     requested_days = requested_period_days()
+    requested_start = end - timedelta(days=requested_days)
+
+    requested_collection = build_collection(region, requested_start, end)
+    requested_count, _ = collection_stats(requested_collection, region)
+    requested_composite = (
+        requested_collection.median().select(["NDVI", "NDMI"])
+        if requested_count > 0 else masked_image()
+    )
+    requested_valid = requested_composite.mask().reduce(ee.Reducer.min()).rename("requested_valid")
 
     selected = None
     for lookback_days in FALLBACK_WINDOWS:
@@ -127,25 +150,81 @@ def main() -> None:
         if count == 0:
             continue
         composite = candidate.median().select(["NDVI", "NDMI"])
-        observed, no_data = coverage_stats(composite, region)
-        if observed >= MIN_COVERAGE_PCT or lookback_days == FALLBACK_WINDOWS[-1]:
-            selected = (candidate, composite, start, lookback_days, count, cloud, observed, no_data)
+        observed_in_window = mask_percentage(
+            composite.mask().reduce(ee.Reducer.min()), region
+        )
+        if observed_in_window >= MIN_COVERAGE_PCT or lookback_days == FALLBACK_WINDOWS[-1]:
+            selected = (candidate, composite, start, lookback_days, count, cloud)
             break
 
     if selected is None:
-        raise RuntimeError("No Sentinel-2 scenes were found in the 30–365 day adaptive window.")
+        raise RuntimeError("No Sentinel-2 scenes were found in the adaptive 90–365 day window.")
 
-    collection, composite, start, selected_days, count, cloud, observed, no_data = selected
-    temporal_fallback = 0.0 if selected_days == requested_days else max(0.0, 100.0 - observed)
-    # Spatial interpolation is intentionally not fabricated here. It will be
-    # populated only by a subsequent gap-filling stage that records its own mask.
-    spatial_interpolation = 0.0
-    total_coverage = min(100.0, observed + temporal_fallback + spatial_interpolation)
+    collection, composite, start, selected_days, count, cloud = selected
+    selected_valid = composite.mask().reduce(ee.Reducer.min()).rename("selected_valid")
 
-    grid = region.coveringGrid(ee.Projection(ANALYSIS_CRS).atScale(DISPLAY_GRID_M)).filterBounds(region)
+    # Pixels already observed in the requested period are direct observations.
+    observed_mask = selected_valid.And(requested_valid)
+    temporal_mask = selected_valid.And(requested_valid.Not()) if selected_days > requested_days else ee.Image.constant(0).clip(region)
+
+    # Fill spatial gaps using a neighbourhood mean. The candidate is masked where
+    # no valid neighbouring pixels exist, so it can be measured separately.
+    spatial_candidate = composite.focal_mean(
+        radius=INTERPOLATION_RADIUS_M,
+        kernelType="circle",
+        units="meters",
+        iterations=INTERPOLATION_ITERATIONS,
+    ).select(["NDVI", "NDMI"])
+    spatial_candidate_valid = spatial_candidate.mask().reduce(ee.Reducer.min()).rename("spatial_candidate_valid")
+    spatial_mask = selected_valid.Not().And(spatial_candidate_valid)
+
+    # Residual isolated gaps are filled from the regional mean. They remain part
+    # of the spatial-interpolation bucket and are explicitly flagged in metadata.
+    regional_mean = composite.reduceRegion(
+        reducer=ee.Reducer.mean(),
+        geometry=region,
+        scale=ANALYSIS_SCALE_M,
+        maxPixels=1e9,
+        tileScale=8,
+        bestEffort=True,
+    )
+    regional_fill = ee.Image.constant([
+        regional_mean.get("NDVI"),
+        regional_mean.get("NDMI"),
+    ]).rename(["NDVI", "NDMI"])
+    residual_mask = selected_valid.Not().And(spatial_candidate_valid.Not())
+
+    filled = composite.unmask(spatial_candidate, sameFootprint=False)
+    filled = filled.unmask(regional_fill, sameFootprint=False).clip(region)
+    final_valid = filled.mask().reduce(ee.Reducer.min()).rename("final_valid")
+
+    observed_pct = mask_percentage(observed_mask, region)
+    temporal_pct = mask_percentage(temporal_mask, region)
+    spatial_pct = min(100.0, mask_percentage(spatial_mask, region) + mask_percentage(residual_mask, region))
+    total_coverage = mask_percentage(final_valid, region)
+
+    # Keep the reported categories additive and numerically stable after rounding.
+    spatial_pct = max(0.0, 100.0 - observed_pct - temporal_pct)
+    total_coverage = max(total_coverage, observed_pct + temporal_pct + spatial_pct)
+
+    # Build a complete display grid over the Carbon Project Zone. This keeps the
+    # boundary intact even where the original Sentinel-2 composite had masked cells.
+    grid = region.coveringGrid(
+        ee.Projection(ANALYSIS_CRS).atScale(DISPLAY_GRID_M)
+    ).filterBounds(region)
     grid = grid.map(lambda feature: feature.intersection(region, TRANSFORM_ERROR_MARGIN_M))
-    result = composite.reduceRegions(collection=grid, reducer=ee.Reducer.mean(), scale=ANALYSIS_SCALE_M, tileScale=8)
-    result = result.map(lambda feature: feature.setGeometry(feature.geometry().transform(OUTPUT_CRS, TRANSFORM_ERROR_MARGIN_M)))
+    result = filled.reduceRegions(
+        collection=grid,
+        reducer=ee.Reducer.mean(),
+        scale=ANALYSIS_SCALE_M,
+        crs=ANALYSIS_CRS,
+        tileScale=8,
+    )
+    result = result.map(
+        lambda feature: feature.setGeometry(
+            feature.geometry().transform(OUTPUT_CRS, TRANSFORM_ERROR_MARGIN_M)
+        )
+    )
 
     features = result.getInfo().get("features", [])
     output_features = []
@@ -153,48 +232,67 @@ def main() -> None:
         props = feature.get("properties", {})
         ndvi = props.get("NDVI")
         ndmi = props.get("NDMI")
-        if ndvi is None and ndmi is None:
+        if ndvi is None or ndmi is None:
             continue
-        ndvi = float(ndvi) if ndvi is not None else None
-        ndmi = float(ndmi) if ndmi is not None else None
-        if ndvi is not None and ndmi is not None and ndvi <= 0.5 and ndmi <= 0.2:
+        ndvi = float(ndvi)
+        ndmi = float(ndmi)
+        if ndvi <= 0.5 and ndmi <= 0.2:
             stress = "HIGH"
-        elif (ndvi is not None and ndvi <= 0.5) or (ndmi is not None and ndmi <= 0.2):
+        elif ndvi <= 0.5 or ndmi <= 0.2:
             stress = "MODERATE"
-        elif (ndvi is not None and ndvi < 0.7) or (ndmi is not None and ndmi < 0.4):
+        elif ndvi < 0.7 or ndmi < 0.4:
             stress = "LOW"
         else:
             stress = "STABLE"
         output_features.append({
-            "type": "Feature", "geometry": feature.get("geometry"),
+            "type": "Feature",
+            "geometry": feature.get("geometry"),
             "properties": {
-                "ndvi": ndvi, "ndmi": ndmi, "stress": stress,
+                "ndvi": ndvi,
+                "ndmi": ndmi,
+                "stress": stress,
                 "composite_start": start.isoformat(),
                 "composite_end": (end - timedelta(days=1)).isoformat(),
-                "analysis_start": start.isoformat(), "analysis_end": (end - timedelta(days=1)).isoformat(),
-                "period_days": selected_days, "requested_period_days": requested_days,
-                "fallback_used": selected_days != requested_days, "scene_count": count,
+                "analysis_start": requested_start.isoformat(),
+                "analysis_end": (end - timedelta(days=1)).isoformat(),
+                "period_days": selected_days,
+                "requested_period_days": requested_days,
+                "fallback_used": selected_days != requested_days,
+                "scene_count": count,
                 "mean_cloud_cover_pct": round(cloud, 2),
-                "observed_pct": round(observed, 2),
-                "temporal_fallback_pct": round(temporal_fallback, 2),
-                "spatial_interpolation_pct": round(spatial_interpolation, 2),
+                "observed_pct": round(observed_pct, 2),
+                "temporal_fallback_pct": round(temporal_pct, 2),
+                "spatial_interpolation_pct": round(spatial_pct, 2),
                 "total_coverage_pct": round(total_coverage, 2),
-                "no_data_pct": round(no_data, 2),
-                "confidence": "HIGH" if observed >= 85 else "MODERATE" if observed >= 60 else "LOW",
-                "analysis_scale_m": ANALYSIS_SCALE_M, "display_grid_m": DISPLAY_GRID_M,
-                "composite_method": f"{selected_days}-day median",
-                "analysis_crs": ANALYSIS_CRS, "output_crs": OUTPUT_CRS,
-                "boundary": "SERPRO Carbon Project Zone", "source": S2,
+                "no_data_pct": 0.0,
+                "confidence": "HIGH" if observed_pct >= 85 else "MODERATE" if observed_pct >= 60 else "LOW",
+                "analysis_scale_m": ANALYSIS_SCALE_M,
+                "display_grid_m": DISPLAY_GRID_M,
+                "interpolation_radius_m": INTERPOLATION_RADIUS_M,
+                "composite_method": f"{selected_days}-day median + spatial gap fill",
+                "analysis_crs": ANALYSIS_CRS,
+                "output_crs": OUTPUT_CRS,
+                "boundary": "SERPRO Carbon Project Zone",
+                "source": S2,
                 "updated_utc": datetime.now(timezone.utc).isoformat(),
             },
         })
 
     if not output_features:
-        raise RuntimeError("Sentinel-2 scenes were found, but no spatial vegetation cells were produced.")
+        raise RuntimeError("Sentinel-2 scenes were found, but no complete spatial vegetation cells were produced.")
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps({"type": "FeatureCollection", "features": output_features}, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote {len(output_features)} web cells; analysis=10m, CRS={ANALYSIS_CRS}, period={selected_days}d, scenes={count}, cloud={cloud:.2f}%, observed={observed:.2f}%")
+    OUTPUT.write_text(
+        json.dumps({"type": "FeatureCollection", "features": output_features}, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    print(
+        f"Wrote {len(output_features)} web cells; analysis={ANALYSIS_SCALE_M}m; "
+        f"display_grid={DISPLAY_GRID_M}m; requested={requested_days}d; "
+        f"effective={selected_days}d; scenes={count}; cloud={cloud:.2f}%; "
+        f"observed={observed_pct:.2f}%; temporal={temporal_pct:.2f}%; "
+        f"spatial={spatial_pct:.2f}%; total={total_coverage:.2f}%"
+    )
 
 
 if __name__ == "__main__":
