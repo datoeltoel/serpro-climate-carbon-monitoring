@@ -6,7 +6,7 @@ export. The spatial extent is the official SERPRO Carbon Project Zone.
 
 The requested composite window is attempted first. If there are no valid
 Sentinel-2 scenes after cloud/SCL masking, the workflow automatically expands
-the window to 60 and then 90 days. The output records the actual period used.
+the window to the next available fallback period up to 90 days.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ ZONE_GEOJSON = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojs
 OUTPUT = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
 S2 = "COPERNICUS/S2_SR_HARMONIZED"
 DEFAULT_LOOKBACK_DAYS = 30
-FALLBACK_WINDOWS_DAYS = [30, 60, 90]
+MAX_FALLBACK_DAYS = 90
 MAX_CLOUDY_PIXEL_PERCENTAGE = 40
 ANALYSIS_SCALE_M = 10
 DISPLAY_GRID_M = 100
@@ -90,18 +90,34 @@ def build_collection(region: ee.Geometry, start: date, end: date) -> ee.ImageCol
     )
 
 
+def requested_period_days() -> int:
+    raw = os.environ.get("SPATIAL_PERIOD_DAYS", str(DEFAULT_LOOKBACK_DAYS))
+    try:
+        value = int(raw)
+    except ValueError:
+        value = DEFAULT_LOOKBACK_DAYS
+    if value not in (30, 60, 90):
+        value = DEFAULT_LOOKBACK_DAYS
+    return value
+
+
+def fallback_windows(requested: int) -> list[int]:
+    # Never silently shorten a user-selected period. Only expand when needed.
+    return sorted({requested, *(x for x in (60, 90) if x > requested)})
+
+
 def main() -> None:
     authenticate_ee()
     region = carbon_project_zone_geometry()
     end = date.today() + timedelta(days=1)
+    requested_days = requested_period_days()
 
     collection = None
     count = 0
     selected_days = None
     start = None
 
-    # Automatic date fallback: 30D -> 60D -> 90D.
-    for lookback_days in FALLBACK_WINDOWS_DAYS:
+    for lookback_days in fallback_windows(requested_days):
         candidate_start = end - timedelta(days=lookback_days)
         candidate = build_collection(region, candidate_start, end)
         candidate_count = int(candidate.size().getInfo())
@@ -114,7 +130,7 @@ def main() -> None:
 
     if collection is None or start is None or selected_days is None:
         raise RuntimeError(
-            "No valid Sentinel-2 scenes found for 30, 60, or 90-day fallback windows."
+            f"No valid Sentinel-2 scenes found for {requested_days}, 60, or 90-day windows."
         )
 
     composite = collection.median().select(["NDVI", "NDMI"])
@@ -127,11 +143,9 @@ def main() -> None:
         .filterBounds(region)
     )
 
-    # Clip every display cell to the official Carbon Project Zone so that the
-    # map follows the real boundary instead of showing rectangular cells outside it.
-    grid = grid.map(
-        lambda feature: feature.intersection(region, TRANSFORM_ERROR_MARGIN_M)
-    )
+    # Clip every display cell to the official Carbon Project Zone so the map
+    # follows the actual boundary rather than showing rectangular cells outside it.
+    grid = grid.map(lambda feature: feature.intersection(region, TRANSFORM_ERROR_MARGIN_M))
 
     result = composite.reduceRegions(
         collection=grid,
@@ -176,12 +190,12 @@ def main() -> None:
                 "composite_start": start.isoformat(),
                 "composite_end": (end - timedelta(days=1)).isoformat(),
                 "period_days": selected_days,
-                "requested_period_days": DEFAULT_LOOKBACK_DAYS,
-                "fallback_used": selected_days != DEFAULT_LOOKBACK_DAYS,
+                "requested_period_days": requested_days,
+                "fallback_used": selected_days != requested_days,
                 "scene_count": count,
                 "analysis_scale_m": ANALYSIS_SCALE_M,
                 "display_grid_m": DISPLAY_GRID_M,
-                "composite_method": "30-day median" if selected_days == 30 else f"{selected_days}-day median fallback",
+                "composite_method": f"{selected_days}-day median",
                 "analysis_crs": ANALYSIS_CRS,
                 "output_crs": OUTPUT_CRS,
                 "boundary": "SERPRO Carbon Project Zone",
@@ -201,8 +215,8 @@ def main() -> None:
     print(
         f"Wrote {len(output_features)} cells: boundary=Carbon Project Zone, "
         f"analysis={ANALYSIS_SCALE_M}m, display_grid={DISPLAY_GRID_M}m, "
-        f"period={selected_days}d, scenes={count}, analysis_crs={ANALYSIS_CRS}, "
-        f"output_crs={OUTPUT_CRS}"
+        f"requested_period={requested_days}d, actual_period={selected_days}d, "
+        f"scenes={count}, analysis_crs={ANALYSIS_CRS}, output_crs={OUTPUT_CRS}"
     )
 
 
