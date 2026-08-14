@@ -30,6 +30,7 @@ GRID_SCALE_M = 2000
 # longitude/latitude coordinates.
 ANALYSIS_CRS = "EPSG:32749"
 OUTPUT_CRS = "EPSG:4326"
+TRANSFORM_ERROR_MARGIN_M = 1
 
 
 def authenticate_ee() -> None:
@@ -102,9 +103,12 @@ def main() -> None:
     )
 
     # Leaflet/Folium expects GeoJSON in WGS84 longitude/latitude.
-    # Transform only the exported geometry from UTM 49S to EPSG:4326.
+    # Earth Engine requires a non-zero error margin for this geometry transform.
+    # The analysis grid remains in EPSG:32749; only exported geometry is transformed.
     result = result.map(
-        lambda feature: feature.setGeometry(feature.geometry().transform(OUTPUT_CRS))
+        lambda feature: feature.setGeometry(
+            feature.geometry().transform(OUTPUT_CRS, TRANSFORM_ERROR_MARGIN_M)
+        )
     )
 
     features = result.getInfo().get("features", [])
