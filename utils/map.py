@@ -1,5 +1,8 @@
 import gzip
 import json
+import os
+import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -56,6 +59,54 @@ def _bounds_from_geojson(collection):
     return [[min(lats),min(lons)],[max(lats),max(lons)]]
 
 
+def _google_satellite_layer():
+    """Create an official Google Maps Platform satellite 2D tile layer when configured.
+
+    Requires a Streamlit secret named GOOGLE_MAPS_API_KEY. If it is not configured,
+    the app keeps its existing basemaps and does not call Google.
+    """
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("GOOGLE_MAPS_API_KEY", None)
+    except Exception:
+        api_key = None
+    api_key = api_key or os.getenv("GOOGLE_MAPS_API_KEY")
+    if not api_key:
+        return None
+    try:
+        payload = json.dumps({
+            "mapType": "satellite",
+            "language": "en-US",
+            "region": "ID",
+            "imageFormat": "png",
+        }).encode("utf-8")
+        url = "https://tile.googleapis.com/v1/createSession?" + urllib.parse.urlencode({"key": api_key})
+        request = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(request, timeout=8) as response:
+            session = json.loads(response.read().decode("utf-8")).get("session")
+        if not session:
+            return None
+        tile_url = "https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?" + urllib.parse.urlencode({"session": session, "key": api_key})
+        return folium.TileLayer(
+            tiles=tile_url,
+            attr="Google Maps Platform",
+            name="Google Satellite",
+            overlay=False,
+            control=True,
+            show=False,
+            max_zoom=20,
+        )
+    except Exception:
+        return None
+
+
+def _add_google_to_map(m):
+    layer = _google_satellite_layer()
+    if layer is not None:
+        layer.add_to(m)
+    return m
+
+
 def _prepare_hotspots(hotspots):
     if hotspots is None or hotspots.empty:
         return pd.DataFrame(), False
@@ -79,11 +130,12 @@ def render_map(hotspots, monitoring_points=None, focus="All Boundaries"):
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         attr="Tiles © Esri",
-        name="Satellite imagery",
+        name="Satellite imagery · Esri",
         overlay=False,
         control=True,
         show=True,
     ).add_to(m)
+    _add_google_to_map(m)
     Fullscreen().add_to(m)
 
     show_project_area=focus in ("All Boundaries","SERPRO Project Area")
@@ -109,7 +161,6 @@ def render_map(hotspots, monitoring_points=None, focus="All Boundaries"):
             folium.CircleMarker(location=[float(row["lat"]),float(row["lon"])],radius=5.5,color=color,fill=True,fill_color=color,fill_opacity=.9,weight=1,popup=popup).add_to(hotspot_group)
     hotspot_group.add_to(m)
 
-    # Monitoring points are shown only when backed by a live dataset.
     if monitoring_points is not None and not monitoring_points.empty and "is_live" in monitoring_points.columns:
         live_points=monitoring_points[monitoring_points["is_live"]==True]
         if not live_points.empty:
