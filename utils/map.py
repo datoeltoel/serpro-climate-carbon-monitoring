@@ -36,7 +36,7 @@ def load_project_area(path=PROJECT_AREA_SOURCE):
 
 def load_carbon_project_zone(path=CARBON_PROJECT_ZONE):
     if not path.exists():
-        return {"type":"FeatureCollection","features":[]}
+        return {"type": "FeatureCollection", "features": []}
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -60,11 +60,7 @@ def _bounds_from_geojson(collection):
 
 
 def _google_satellite_layer():
-    """Create an official Google Maps Platform satellite 2D tile layer when configured.
-
-    Requires a Streamlit secret named GOOGLE_MAPS_API_KEY. If it is not configured,
-    the app keeps its existing basemaps and does not call Google.
-    """
+    """Create an official Google Maps Platform satellite 2D tile layer when configured."""
     try:
         import streamlit as st
         api_key = st.secrets.get("GOOGLE_MAPS_API_KEY", None)
@@ -107,6 +103,18 @@ def _add_google_to_map(m):
     return m
 
 
+def _map_with_optional_google(*args, **kwargs):
+    """Preserve Folium's Map API while adding Google Satellite when configured."""
+    m = _ORIGINAL_FOLIUM_MAP(*args, **kwargs)
+    if kwargs.get("tiles") is None:
+        _add_google_to_map(m)
+    return m
+
+
+_ORIGINAL_FOLIUM_MAP = folium.Map
+folium.Map = _map_with_optional_google
+
+
 def _prepare_hotspots(hotspots):
     if hotspots is None or hotspots.empty:
         return pd.DataFrame(), False
@@ -135,7 +143,6 @@ def render_map(hotspots, monitoring_points=None, focus="All Boundaries"):
         control=True,
         show=True,
     ).add_to(m)
-    _add_google_to_map(m)
     Fullscreen().add_to(m)
 
     show_project_area=focus in ("All Boundaries","SERPRO Project Area")
