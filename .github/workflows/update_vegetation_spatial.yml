@@ -2,6 +2,16 @@ name: Update SERPRO Spatial Vegetation
 
 on:
   workflow_dispatch:
+    inputs:
+      period_days:
+        description: "Requested Sentinel-2 composite period"
+        required: true
+        default: "30"
+        type: choice
+        options:
+          - "30"
+          - "60"
+          - "90"
   push:
     paths:
       - "scripts/update_vegetation_spatial.py"
@@ -37,7 +47,6 @@ jobs:
         run: pip install -r requirements.txt
 
       # Synchronize with the current main branch BEFORE generating the data.
-      # This prevents the generated GeoJSON from being based on a stale commit.
       - name: Sync main before data generation
         run: |
           git fetch origin main
@@ -47,6 +56,7 @@ jobs:
         env:
           EE_SERVICE_ACCOUNT_JSON: ${{ secrets.EE_SERVICE_ACCOUNT_JSON }}
           EE_PROJECT_ID: ${{ secrets.EE_PROJECT_ID }}
+          SPATIAL_PERIOD_DAYS: ${{ inputs.period_days || '30' }}
         run: python scripts/update_vegetation_spatial.py
 
       - name: Commit and push spatial vegetation data
@@ -61,5 +71,7 @@ jobs:
           git commit -m "data: update spatial vegetation layer"
           git push origin HEAD:main
 
-# The spatial analysis itself uses WGS 84 / UTM 49S (EPSG:32749).
-# Web GeoJSON output remains EPSG:4326 for Leaflet/Folium compatibility.
+# Spatial analysis: WGS 84 / UTM 49S (EPSG:32749).
+# Web GeoJSON output: EPSG:4326 for Leaflet/Folium compatibility.
+# The script automatically falls back from 30 -> 60 -> 90 days when no valid
+# Sentinel-2 scenes are available in the requested window.
