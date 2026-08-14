@@ -23,6 +23,12 @@ S2 = "COPERNICUS/S2_SR_HARMONIZED"
 LOOKBACK_DAYS = 30
 MAX_CLOUDY_PIXEL_PERCENTAGE = 40
 GRID_SCALE_M = 2000
+
+# SERPRO is in Seruyan, Central Kalimantan, within WGS 84 / UTM zone 49S.
+# EPSG:32749 = WGS 84 / UTM zone 49S (projected CRS for spatial analysis).
+# GeoJSON is exported in EPSG:4326 because Leaflet/Folium expects WGS84
+# longitude/latitude coordinates.
+ANALYSIS_CRS = "EPSG:32749"
 OUTPUT_CRS = "EPSG:4326"
 
 
@@ -85,8 +91,9 @@ def main() -> None:
         raise RuntimeError("No valid Sentinel-2 scenes found for the latest 30 days.")
 
     composite = collection.median().select(["NDVI", "NDMI"])
-    # UTM 50S is appropriate for the SERPRO area around 112E.
-    grid = region.coveringGrid(ee.Projection("EPSG:32750").atScale(GRID_SCALE_M)).filterBounds(region)
+    # Spatial analysis/grid uses WGS 84 / UTM 49S (EPSG:32749),
+    # appropriate for the SERPRO project area in Seruyan.
+    grid = region.coveringGrid(ee.Projection(ANALYSIS_CRS).atScale(GRID_SCALE_M)).filterBounds(region)
     result = composite.reduceRegions(
         collection=grid,
         reducer=ee.Reducer.mean(),
@@ -94,8 +101,8 @@ def main() -> None:
         tileScale=4,
     )
 
-    # The grid is created in UTM 50S, but GeoJSON coordinates must be WGS84
-    # longitude/latitude for Leaflet/Folium. Transform geometries before export.
+    # Leaflet/Folium expects GeoJSON in WGS84 longitude/latitude.
+    # Transform only the exported geometry from UTM 49S to EPSG:4326.
     result = result.map(
         lambda feature: feature.setGeometry(feature.geometry().transform(OUTPUT_CRS))
     )
@@ -131,6 +138,8 @@ def main() -> None:
                 "scene_count": count,
                 "resolution_m": GRID_SCALE_M,
                 "composite_method": "30-day median",
+                "analysis_crs": ANALYSIS_CRS,
+                "output_crs": OUTPUT_CRS,
                 "source": S2,
                 "updated_utc": datetime.now(timezone.utc).isoformat(),
             },
@@ -143,7 +152,7 @@ def main() -> None:
         json.dumps({"type": "FeatureCollection", "features": output_features}, separators=(",", ":")),
         encoding="utf-8",
     )
-    print(f"Wrote {len(output_features)} spatial vegetation cells to {OUTPUT} in {OUTPUT_CRS}")
+    print(f"Wrote {len(output_features)} spatial vegetation cells: analysis={ANALYSIS_CRS}, output={OUTPUT_CRS}")
 
 
 if __name__ == "__main__":
