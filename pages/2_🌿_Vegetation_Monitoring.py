@@ -12,14 +12,10 @@ from utils.ui import setup_page
 
 setup_page()
 
-# -----------------------------------------------------------------------------
-# UI / UX
-# -----------------------------------------------------------------------------
 st.markdown(
     """
     <style>
-    .vm-hero{padding:4px 0 12px 0}
-    .vm-hero h1{margin-bottom:2px}
+    .vm-hero{padding:4px 0 12px 0}.vm-hero h1{margin-bottom:2px}
     .vm-muted{color:#64748b;font-size:.84rem}
     .vm-kpi{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:13px 14px;min-height:108px;box-shadow:0 2px 9px rgba(15,23,42,.05)}
     .vm-kpi-label{font-size:.70rem;color:#64748b;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
@@ -34,8 +30,7 @@ st.markdown(
     .vm-high{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}.vm-medium{background:#fef9c3;color:#854d0e;border:1px solid #fde68a}.vm-low{background:#ffedd5;color:#9a3412;border:1px solid #fed7aa}
     .vm-note{font-size:.75rem;color:#64748b;line-height:1.45}
     </style>
-    """,
-    unsafe_allow_html=True,
+    """, unsafe_allow_html=True,
 )
 
 st.markdown('<div class="vm-hero">', unsafe_allow_html=True)
@@ -43,9 +38,6 @@ st.markdown("# 🌿 Vegetation Monitoring")
 st.markdown('<div class="vm-muted">SERPRO Project · Sentinel-2 vegetation health, vigor, canopy moisture and spatial stress screening</div>', unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
-# Load data
-# -----------------------------------------------------------------------------
 ndmi = load_ndmi()
 ndvi = load_ndvi()
 spatial = load_vegetation_spatial()
@@ -58,9 +50,6 @@ if ndmi.empty and ndvi.empty:
     st.info("No NDVI/NDMI data is currently available. Run the vegetation update workflow.")
     st.stop()
 
-# -----------------------------------------------------------------------------
-# Scope + period controls
-# -----------------------------------------------------------------------------
 scope_keys = sorted(
     set(ndmi.get("scope", pd.Series(dtype=str)).dropna().astype(str))
     | set(ndvi.get("scope", pd.Series(dtype=str)).dropna().astype(str))
@@ -70,16 +59,17 @@ if not scope_keys:
     st.stop()
 
 scope_labels = {
-    "carbon_project_zone": "🟣 Carbon Project Zone",
-    "project_area": "🟢 SERPRO Project Area",
+    "carbon_project_zone": "🟣 Carbon Project Zone · reference",
+    "project_area": "🟢 SERPRO Project Area · analysis",
 }
 
 c_scope, c_period = st.columns([1.15, 1], gap="medium")
 with c_scope:
+    preferred_scope = "project_area" if "project_area" in scope_keys else scope_keys[0]
     scope = st.selectbox(
         "Monitoring scope",
         scope_keys,
-        index=scope_keys.index("carbon_project_zone") if "carbon_project_zone" in scope_keys else 0,
+        index=scope_keys.index(preferred_scope),
         format_func=lambda x: scope_labels.get(x, x.replace("_", " ").title()),
     )
 
@@ -90,12 +80,7 @@ all_dates = pd.concat([x["date"] for x in (ndvi_s, ndmi_s) if not x.empty], igno
 with c_period:
     if not all_dates.empty:
         min_date, max_date = all_dates.min().date(), all_dates.max().date()
-        date_range = st.date_input(
-            "Monitoring period",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-        )
+        date_range = st.date_input("Monitoring period", value=(min_date, max_date), min_value=min_date, max_value=max_date)
     else:
         date_range = None
 
@@ -156,9 +141,6 @@ else:
 
 stress_color = {"HIGH":"#b91c1c", "MODERATE":"#b45309", "LOW":"#2563eb", "STABLE":"#15803d"}[stress_level]
 
-# -----------------------------------------------------------------------------
-# KPI overview
-# -----------------------------------------------------------------------------
 st.markdown("### 🌱 Vegetation Condition Overview")
 kpis = [
     ("🌿", "NDVI", f"{latest_ndvi:.3f}" if latest_ndvi is not None else "—", ndvi_label, ndvi_color),
@@ -170,10 +152,7 @@ kpis = [
 cols = st.columns(5, gap="small")
 for col, (icon, title, value, sub, color) in zip(cols, kpis):
     with col:
-        st.markdown(
-            f'<div class="vm-kpi"><div class="vm-kpi-label">{icon} {title}</div><div class="vm-kpi-value">{value}</div><div class="vm-kpi-sub" style="color:{color}">{sub}</div></div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown(f'<div class="vm-kpi"><div class="vm-kpi-label">{icon} {title}</div><div class="vm-kpi-value">{value}</div><div class="vm-kpi-sub" style="color:{color}">{sub}</div></div>', unsafe_allow_html=True)
 
 if stress_level == "HIGH":
     st.error("🚨 High vegetation stress: both NDVI and NDMI declined by at least 10% over the last 30 days. Prioritize field verification.")
@@ -184,9 +163,7 @@ elif stress_level == "LOW":
 else:
     st.success("✅ No vegetation stress signal detected under the current screening rules.")
 
-# -----------------------------------------------------------------------------
-# Spatial map helpers
-# -----------------------------------------------------------------------------
+
 def bounds_from_geojson(collection):
     points = []
     for feature in collection.get("features", []):
@@ -209,38 +186,15 @@ def bounds_from_geojson(collection):
 
 def build_vegetation_map():
     m = folium.Map(location=[-3.10, 112.62], zoom_start=9, tiles=None, control_scale=True)
-
-    # Basemaps: OSM + Esri World Imagery. No Google dependency.
-    folium.TileLayer(
-        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-        attr="© OpenStreetMap contributors",
-        name="OpenStreetMap",
-        overlay=False,
-        show=True,
-    ).add_to(m)
-    folium.TileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        attr="Tiles © Esri",
-        name="Satellite imagery · Esri World Imagery",
-        overlay=False,
-        show=False,
-    ).add_to(m)
+    folium.TileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", attr="© OpenStreetMap contributors", name="OpenStreetMap", overlay=False, show=True).add_to(m)
+    folium.TileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attr="Tiles © Esri", name="Satellite imagery · Esri World Imagery", overlay=False, show=False).add_to(m)
 
     project_area = load_project_area()
     zone = load_carbon_project_zone()
-
     if project_area.get("features"):
-        folium.GeoJson(
-            project_area,
-            name="🟢 SERPRO Project Area",
-            style_function=lambda _: {"color":"#16a34a", "weight":3, "fillOpacity":0},
-        ).add_to(m)
+        folium.GeoJson(project_area, name="🟢 SERPRO Project Area · ANALYSIS", style_function=lambda _: {"color":"#16a34a", "weight":3, "fillOpacity":0}).add_to(m)
     if zone.get("features"):
-        folium.GeoJson(
-            zone,
-            name="🟣 Carbon Project Zone",
-            style_function=lambda _: {"color":"#7c3aed", "weight":2.5, "fillOpacity":0},
-        ).add_to(m)
+        folium.GeoJson(zone, name="🟣 Carbon Project Zone · reference", style_function=lambda _: {"color":"#7c3aed", "weight":2.5, "fillOpacity":0}).add_to(m)
 
     def add_spatial_layer(field, label, title):
         layer_data = deepcopy(spatial)
@@ -285,9 +239,10 @@ def build_vegetation_map():
     add_spatial_layer("ndmi", "💧 NDMI · canopy moisture", "NDMI")
     add_spatial_layer("stress", "⚠️ Combined vegetation stress", "Status")
 
-    zone_bounds = bounds_from_geojson(zone)
-    if zone_bounds:
-        m.fit_bounds(zone_bounds, padding=(12, 12))
+    # The analysis layer is clipped to Project Area, so frame the map around it.
+    area_bounds = bounds_from_geojson(project_area)
+    if area_bounds:
+        m.fit_bounds(area_bounds, padding=(12, 12))
     folium.LayerControl(collapsed=False).add_to(m)
     return m
 
@@ -297,49 +252,19 @@ def quality_chart(props):
     temporal = float(props.get("temporal_fallback_pct") or 0)
     spatial_fill = float(props.get("spatial_interpolation_pct") or 0)
     total = float(props.get("total_coverage_pct") or observed + temporal + spatial_fill)
-
-    fig = go.Figure(
-        go.Bar(
-            x=[observed, temporal, spatial_fill],
-            y=["Observed", "Temporal fallback", "Spatial interpolation"],
-            orientation="h",
-            text=[f"{observed:.1f}%", f"{temporal:.1f}%", f"{spatial_fill:.1f}%"],
-            textposition="outside",
-            marker_color=["#16a34a", "#eab308", "#f97316"],
-        )
-    )
-    fig.update_layout(
-        height=185,
-        margin=dict(l=5, r=55, t=5, b=5),
-        xaxis=dict(range=[0, 105], title="Coverage (%)"),
-        yaxis=dict(autorange="reversed"),
-        showlegend=False,
-    )
+    fig = go.Figure(go.Bar(x=[observed, temporal, spatial_fill], y=["Observed", "Temporal fallback", "Spatial interpolation"], orientation="h", text=[f"{observed:.1f}%", f"{temporal:.1f}%", f"{spatial_fill:.1f}%"], textposition="outside", marker_color=["#16a34a", "#eab308", "#f97316"]))
+    fig.update_layout(height=185, margin=dict(l=5, r=55, t=5, b=5), xaxis=dict(range=[0, 105], title="Coverage (%)"), yaxis=dict(autorange="reversed"), showlegend=False)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     st.markdown(f"**Total coverage: {total:.1f}%**")
 
-# -----------------------------------------------------------------------------
-# Spatial section — deliberately isolated so a map/plugin issue cannot blank
-# the rest of the page.
-# -----------------------------------------------------------------------------
 st.markdown("### 🗺️ Spatial Vegetation Condition")
 
 if spatial.get("features"):
     props = spatial["features"][0].get("properties", {})
     map_col, info_col = st.columns([2.15, 1], gap="medium")
-
     with map_col:
         try:
-            # IMPORTANT: do not use use_container_width here. Some deployed
-            # streamlit-folium versions do not support that argument and the
-            # exception previously caused the entire spatial section to vanish.
-            st_folium(
-                build_vegetation_map(),
-                width=900,
-                height=520,
-                returned_objects=[],
-                key="vegetation_spatial_map",
-            )
+            st_folium(build_vegetation_map(), width=900, height=520, returned_objects=[], key="vegetation_spatial_map")
         except Exception as exc:
             st.error("Spatial map could not be rendered, but the monitoring dashboard remains available.")
             st.caption(f"Map rendering detail: {type(exc).__name__}")
@@ -353,12 +278,14 @@ if spatial.get("features"):
         scenes = int(props.get("scene_count") or 0)
         cloud = float(props.get("mean_cloud_cover_pct") or 0)
         display_grid = int(props.get("display_grid_m") or 100)
+        boundary = props.get("boundary") or "SERPRO Project Area"
         rows = [
             ("Analysis period", f"{start_text} → {end_text}"),
             ("Effective composite", f"{effective} days"),
             ("Spatial resolution", "10 × 10 m analysis"),
             ("Web display grid", f"{display_grid} m"),
-            ("Boundary", "Carbon Project Zone"),
+            ("Analysis boundary", boundary),
+            ("Reference boundary", "Carbon Project Zone"),
             ("Sentinel-2 scenes", f"{scenes:,}"),
             ("Mean cloud cover", f"{cloud:.1f}%"),
             ("Requested period", f"{requested} days"),
@@ -369,24 +296,13 @@ if spatial.get("features"):
         st.markdown('<div class="vm-section">Data Quality</div>', unsafe_allow_html=True)
         quality_chart(props)
         observed = float(props.get("observed_pct") or 0)
-        if observed >= 85:
-            badge = ("🟢 HIGH CONFIDENCE", "vm-high")
-        elif observed >= 60:
-            badge = ("🟡 MODERATE CONFIDENCE", "vm-medium")
-        else:
-            badge = ("🟠 LOW CONFIDENCE", "vm-low")
+        badge = ("🟢 HIGH CONFIDENCE", "vm-high") if observed >= 85 else ("🟡 MODERATE CONFIDENCE", "vm-medium") if observed >= 60 else ("🟠 LOW CONFIDENCE", "vm-low")
         st.markdown(f'<div class="vm-badge {badge[1]}">{badge[0]}</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="vm-note">Confidence reflects the share of pixels directly observed by Sentinel-2. Temporal fallback and spatial interpolation are estimated values and are reported separately.</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="vm-note">Confidence reflects the share of Project Area pixels directly observed by Sentinel-2. Temporal fallback and spatial interpolation are estimated values and are reported separately.</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 else:
     st.warning("Spatial vegetation layer is not available yet. Run the Update SERPRO Spatial Vegetation workflow.")
 
-# -----------------------------------------------------------------------------
-# Trends and interpretation
-# -----------------------------------------------------------------------------
 st.markdown("### 📈 Recent Vegetation Trend")
 trend_col, interpretation_col = st.columns([1.6, 1], gap="medium")
 with trend_col:
@@ -406,16 +322,10 @@ with interpretation_col:
 
 st.markdown("### 🔎 Stress Analysis")
 sa1, sa2, sa3 = st.columns(3)
-with sa1:
-    st.metric("NDVI 30D", f"{ndvi30:+.1f}%" if ndvi30 is not None else "—")
-with sa2:
-    st.metric("NDMI 30D", f"{ndmi30:+.1f}%" if ndmi30 is not None else "—")
-with sa3:
-    st.metric("Screening status", stress_level)
+with sa1: st.metric("NDVI 30D", f"{ndvi30:+.1f}%" if ndvi30 is not None else "—")
+with sa2: st.metric("NDMI 30D", f"{ndmi30:+.1f}%" if ndmi30 is not None else "—")
+with sa3: st.metric("Screening status", stress_level)
 
-# -----------------------------------------------------------------------------
-# Observation data
-# -----------------------------------------------------------------------------
 st.markdown("### 🗃️ Observation Data")
 obs1, obs2 = st.tabs(["NDVI observations", "NDMI observations"])
 with obs1:
@@ -427,7 +337,8 @@ if spatial.get("features"):
     st.markdown("### ℹ️ Data & Quality Notes")
     p = spatial["features"][0].get("properties", {})
     st.info(
-        f"Sentinel-2 SR Harmonized · analysis scale 10 m · Carbon Project Zone boundary · "
-        f"effective composite {int(p.get('period_days') or 90)} days · mean scene cloud cover {float(p.get('mean_cloud_cover_pct') or 0):.1f}%. "
-        "The web map displays the complete Carbon Project Zone. Direct observations, temporal fallback and spatial interpolation are explicitly separated in the quality summary."
+        f"Sentinel-2 SR Harmonized · native analysis scale 10 m · analytical boundary: Project Area · "
+        f"reference boundary: Carbon Project Zone · effective composite {int(p.get('period_days') or 90)} days · "
+        f"mean scene cloud cover {float(p.get('mean_cloud_cover_pct') or 0):.1f}%. "
+        "The web map renders the complete Project Area only. Carbon Project Zone is retained as a contextual reference boundary. Direct observations, temporal fallback and spatial interpolation are explicitly separated in the quality summary."
     )
