@@ -12,6 +12,8 @@ on:
           - "30"
           - "60"
           - "90"
+          - "180"
+          - "365"
   push:
     paths:
       - "scripts/update_vegetation_spatial.py"
@@ -46,7 +48,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Synchronize with the current main branch BEFORE generating the data.
       - name: Sync main before data generation
         run: |
           git fetch origin main
@@ -71,7 +72,7 @@ jobs:
           git commit -m "data: update spatial vegetation layer"
           git push origin HEAD:main
 
-# Spatial analysis: WGS 84 / UTM 49S (EPSG:32749).
+# Spatial analysis: WGS 84 / UTM 49S (EPSG:32749), native Sentinel-2 analysis scale 10 m.
 # Web GeoJSON output: EPSG:4326 for Leaflet/Folium compatibility.
-# The script automatically falls back from 30 -> 60 -> 90 days when no valid
-# Sentinel-2 scenes are available in the requested window.
+# Adaptive period: requested 30/60/90/180/365 days, expanded until valid pixel coverage reaches 90%,
+# with 365 days as the maximum fallback. Cloud cover and coverage metadata are written to each feature.
