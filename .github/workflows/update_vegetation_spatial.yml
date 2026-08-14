@@ -49,3 +49,5 @@ jobs:
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
+
+# Triggered to regenerate the spatial GeoJSON using WGS 84 / UTM 49S analysis and EPSG:4326 output.
