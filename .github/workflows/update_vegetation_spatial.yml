@@ -26,7 +26,8 @@ permissions:
 
 concurrency:
   group: serpro-vegetation-spatial-main
-  cancel-in-progress: false
+  # A stale Earth Engine run must not block the next scheduled/manual update.
+  cancel-in-progress: true
 
 jobs:
   spatial-vegetation:
