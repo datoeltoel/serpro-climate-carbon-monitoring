@@ -1,22 +1,4 @@
-"""Build spatial Sentinel-2 vegetation status for the SERPRO Project Area.
-
-Analysis is performed at native Sentinel-2 10 m scale in WGS 84 / UTM 49S.
-The web GeoJSON uses a lighter display grid so the Streamlit map remains fast.
-
-Boundary policy:
-- Project Area is the analytical boundary for vegetation metrics.
-- Carbon Project Zone remains a contextual/reference boundary in the UI.
-
-Coverage strategy:
-1. Direct Sentinel-2 observation inside the requested period.
-2. Temporal fallback from an expanded 90/180/365-day window when needed.
-3. Spatial gap filling with neighbourhood interpolation, followed by a regional
-   mean only for residual isolated gaps.
-
-Estimated pixels are explicitly labelled in quality metadata. Interpolation is
-used only inside the Project Area and is never used to manufacture coverage for
-the wider Carbon Project Zone.
-"""
+"""Build spatial Sentinel-2 vegetation status for the SERPRO Project Area."""
 from __future__ import annotations
 
 import gzip
@@ -30,7 +12,6 @@ import ee
 from google.oauth2 import service_account
 
 PROJECT_AREA_SOURCE = Path("data/static/project_boundary.kml.gz")
-CARBON_PROJECT_ZONE_SOURCE = Path("data/static/boundaries/serpro_carbon_project_zone_web.geojson")
 OUTPUT = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
 S2 = "COPERNICUS/S2_SR_HARMONIZED"
 DEFAULT_LOOKBACK_DAYS = 90
@@ -43,8 +24,10 @@ ANALYSIS_CRS = "EPSG:32749"
 OUTPUT_CRS = "EPSG:4326"
 TRANSFORM_ERROR_MARGIN_M = 1
 MIN_COVERAGE_PCT = 90.0
-INTERPOLATION_RADIUS_M = 500
-INTERPOLATION_ITERATIONS = 3
+# Keep the spatial gap fill deliberately small. The previous 500 m x 3-iteration
+# focal operation was unnecessarily expensive for the whole project area.
+INTERPOLATION_RADIUS_M = 150
+INTERPOLATION_ITERATIONS = 1
 KML_NS = {"kml": "http://www.opengis.net/kml/2.2"}
 
 
@@ -61,14 +44,15 @@ def authenticate_ee() -> None:
 
 
 def project_area_geometry() -> ee.Geometry:
-    """Load the Project Area KML and use all polygon outer rings as one geometry."""
     if not PROJECT_AREA_SOURCE.exists():
         raise RuntimeError(f"Project Area file not found: {PROJECT_AREA_SOURCE}")
     with gzip.open(PROJECT_AREA_SOURCE, "rb") as f:
         root = ET.fromstring(f.read())
-
     polygons = []
-    for ring in root.findall(".//kml:Placemark//kml:Polygon/kml:outerBoundaryIs/kml:LinearRing/kml:coordinates", KML_NS):
+    for ring in root.findall(
+        ".//kml:Placemark//kml:Polygon/kml:outerBoundaryIs/kml:LinearRing/kml:coordinates",
+        KML_NS,
+    ):
         coords = []
         for item in (ring.text or "").split():
             parts = item.split(",")
@@ -76,7 +60,6 @@ def project_area_geometry() -> ee.Geometry:
                 coords.append([float(parts[0]), float(parts[1])])
         if len(coords) >= 4:
             polygons.append([coords])
-
     if not polygons:
         raise RuntimeError("No polygon geometry found in Project Area KML.")
     return ee.Geometry.MultiPolygon(polygons)
@@ -92,9 +75,10 @@ def mask_s2(img: ee.Image) -> ee.Image:
 
 
 def add_indices(img: ee.Image) -> ee.Image:
-    ndvi = img.normalizedDifference(["B8", "B4"]).rename("NDVI")
-    ndmi = img.normalizedDifference(["B8", "B11"]).rename("NDMI")
-    return img.addBands([ndvi, ndmi])
+    return img.addBands([
+        img.normalizedDifference(["B8", "B4"]).rename("NDVI"),
+        img.normalizedDifference(["B8", "B11"]).rename("NDMI"),
+    ])
 
 
 def build_collection(region: ee.Geometry, start: date, end: date) -> ee.ImageCollection:
@@ -109,15 +93,14 @@ def build_collection(region: ee.Geometry, start: date, end: date) -> ee.ImageCol
 
 
 def requested_period_days() -> int:
-    raw = os.environ.get("SPATIAL_PERIOD_DAYS", str(DEFAULT_LOOKBACK_DAYS))
     try:
-        value = int(raw)
+        value = int(os.environ.get("SPATIAL_PERIOD_DAYS", str(DEFAULT_LOOKBACK_DAYS)))
     except ValueError:
         value = DEFAULT_LOOKBACK_DAYS
     return value if value in FALLBACK_WINDOWS else DEFAULT_LOOKBACK_DAYS
 
 
-def collection_stats(collection: ee.ImageCollection, region: ee.Geometry) -> tuple[int, float]:
+def collection_stats(collection: ee.ImageCollection) -> tuple[int, float]:
     count = int(collection.size().getInfo())
     if count == 0:
         return 0, 0.0
@@ -126,10 +109,6 @@ def collection_stats(collection: ee.ImageCollection, region: ee.Geometry) -> tup
 
 
 def mask_percentage(mask: ee.Image, region: ee.Geometry) -> float:
-    """Estimate area percentage cheaply; vegetation values remain native 10 m."""
-    # Coverage statistics do not need a 10 m reducer. Using a 100 m reducer with
-    # bestEffort and a simplified geometry avoids Earth Engine computation timeouts
-    # while leaving the actual NDVI/NDMI analysis and web grid at 10 m/100 m.
     coverage_region = region.simplify(COVERAGE_SCALE_M)
     stats = mask.rename("coverage").reduceRegion(
         reducer=ee.Reducer.mean(),
@@ -154,7 +133,7 @@ def main() -> None:
     requested_start = end - timedelta(days=requested_days)
 
     requested_collection = build_collection(region, requested_start, end)
-    requested_count, _ = collection_stats(requested_collection, region)
+    requested_count, _ = collection_stats(requested_collection)
     requested_composite = (
         requested_collection.median().select(["NDVI", "NDMI"])
         if requested_count > 0 else masked_image()
@@ -167,7 +146,7 @@ def main() -> None:
             continue
         start = end - timedelta(days=lookback_days)
         candidate = build_collection(region, start, end)
-        count, cloud = collection_stats(candidate, region)
+        count, cloud = collection_stats(candidate)
         if count == 0:
             continue
         composite = candidate.median().select(["NDVI", "NDMI"])
@@ -175,13 +154,13 @@ def main() -> None:
             composite.mask().reduce(ee.Reducer.min()), region
         )
         if observed_in_window >= MIN_COVERAGE_PCT or lookback_days == FALLBACK_WINDOWS[-1]:
-            selected = (candidate, composite, start, lookback_days, count, cloud)
+            selected = (composite, start, lookback_days, count, cloud)
             break
 
     if selected is None:
         raise RuntimeError("No Sentinel-2 scenes were found in the adaptive 90–365 day window.")
 
-    collection, composite, start, selected_days, count, cloud = selected
+    composite, start, selected_days, count, cloud = selected
     selected_valid = composite.mask().reduce(ee.Reducer.min()).rename("selected_valid")
 
     observed_mask = selected_valid.And(requested_valid)
@@ -191,6 +170,8 @@ def main() -> None:
         else ee.Image.constant(0).clip(region)
     )
 
+    # Lightweight local fill for small gaps. Large gaps are handled by the
+    # temporal fallback before this stage; residual gaps receive the regional mean.
     spatial_candidate = composite.focal_mean(
         radius=INTERPOLATION_RADIUS_M,
         kernelType="circle",
@@ -200,12 +181,14 @@ def main() -> None:
     spatial_candidate_valid = spatial_candidate.mask().reduce(ee.Reducer.min()).rename("spatial_candidate_valid")
     spatial_mask = selected_valid.Not().And(spatial_candidate_valid)
 
+    # Regional mean is intentionally computed at coverage scale to avoid a
+    # full-area 10 m reducer. It is only a last-resort residual fill.
     regional_mean = composite.reduceRegion(
         reducer=ee.Reducer.mean(),
-        geometry=region,
-        scale=ANALYSIS_SCALE_M,
-        maxPixels=1e9,
-        tileScale=8,
+        geometry=region.simplify(COVERAGE_SCALE_M),
+        scale=COVERAGE_SCALE_M,
+        maxPixels=1e8,
+        tileScale=16,
         bestEffort=True,
     )
     regional_fill = ee.Image.constant([
@@ -220,16 +203,16 @@ def main() -> None:
 
     observed_pct = mask_percentage(observed_mask, region)
     temporal_pct = mask_percentage(temporal_mask, region)
-    spatial_pct = min(100.0, mask_percentage(spatial_mask, region) + mask_percentage(residual_mask, region))
+    spatial_pct = mask_percentage(spatial_mask, region) + mask_percentage(residual_mask, region)
+    spatial_pct = max(0.0, min(100.0, spatial_pct))
     total_coverage = mask_percentage(final_valid, region)
-
     spatial_pct = max(0.0, 100.0 - observed_pct - temporal_pct)
     total_coverage = max(total_coverage, observed_pct + temporal_pct + spatial_pct)
 
-    # Complete display grid over Project Area only. Carbon Project Zone is not
-    # rasterized or interpolated because it is a reference boundary, not the
-    # analytical vegetation boundary.
-    grid = region.coveringGrid(ee.Projection(ANALYSIS_CRS).atScale(DISPLAY_GRID_M)).filterBounds(region)
+    # 100 m display cells, with values aggregated from the native 10 m analysis image.
+    grid = region.coveringGrid(
+        ee.Projection(ANALYSIS_CRS).atScale(DISPLAY_GRID_M)
+    ).filterBounds(region)
     grid = grid.map(lambda feature: feature.intersection(region, TRANSFORM_ERROR_MARGIN_M))
     result = filled.reduceRegions(
         collection=grid,
@@ -291,7 +274,6 @@ def main() -> None:
                 "analysis_crs": ANALYSIS_CRS,
                 "output_crs": OUTPUT_CRS,
                 "boundary": "SERPRO Project Area",
-                "reference_boundary": "SERPRO Carbon Project Zone",
                 "source": S2,
                 "updated_utc": datetime.now(timezone.utc).isoformat(),
             },
@@ -307,10 +289,9 @@ def main() -> None:
     )
     print(
         f"Wrote {len(output_features)} Project Area web cells; analysis={ANALYSIS_SCALE_M}m; "
-        f"display_grid={DISPLAY_GRID_M}m; requested={requested_days}d; "
-        f"effective={selected_days}d; scenes={count}; cloud={cloud:.2f}%; "
-        f"observed={observed_pct:.2f}%; temporal={temporal_pct:.2f}%; "
-        f"spatial={spatial_pct:.2f}%; total={total_coverage:.2f}%"
+        f"display_grid={DISPLAY_GRID_M}m; requested={requested_days}d; effective={selected_days}d; "
+        f"scenes={count}; cloud={cloud:.2f}%; observed={observed_pct:.2f}%; "
+        f"temporal={temporal_pct:.2f}%; spatial={spatial_pct:.2f}%; total={total_coverage:.2f}%"
     )
 
 
