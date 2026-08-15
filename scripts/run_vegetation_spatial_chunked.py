@@ -8,11 +8,19 @@ requests.
 """
 from __future__ import annotations
 
+import sys
 import time
+from pathlib import Path
 
 import ee
 
-from scripts import update_vegetation_spatial as generator
+# The scripts directory is not necessarily installed as a Python package in
+# GitHub Actions, so import the generator from the same directory explicitly.
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import update_vegetation_spatial as generator
 
 
 _ORIGINAL_GET_INFO = ee.featurecollection.FeatureCollection.getInfo
