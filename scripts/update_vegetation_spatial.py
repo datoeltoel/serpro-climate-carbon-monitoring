@@ -38,6 +38,7 @@ FALLBACK_WINDOWS = (90, 180, 365)
 MAX_CLOUDY_PIXEL_PERCENTAGE = 40
 ANALYSIS_SCALE_M = 10
 DISPLAY_GRID_M = 100
+COVERAGE_SCALE_M = 100
 ANALYSIS_CRS = "EPSG:32749"
 OUTPUT_CRS = "EPSG:4326"
 TRANSFORM_ERROR_MARGIN_M = 1
@@ -125,12 +126,17 @@ def collection_stats(collection: ee.ImageCollection, region: ee.Geometry) -> tup
 
 
 def mask_percentage(mask: ee.Image, region: ee.Geometry) -> float:
+    """Estimate area percentage cheaply; vegetation values remain native 10 m."""
+    # Coverage statistics do not need a 10 m reducer. Using a 100 m reducer with
+    # bestEffort and a simplified geometry avoids Earth Engine computation timeouts
+    # while leaving the actual NDVI/NDMI analysis and web grid at 10 m/100 m.
+    coverage_region = region.simplify(COVERAGE_SCALE_M)
     stats = mask.rename("coverage").reduceRegion(
         reducer=ee.Reducer.mean(),
-        geometry=region,
-        scale=ANALYSIS_SCALE_M,
-        maxPixels=1e9,
-        tileScale=8,
+        geometry=coverage_region,
+        scale=COVERAGE_SCALE_M,
+        maxPixels=1e8,
+        tileScale=16,
         bestEffort=True,
     ).getInfo()
     return float(stats.get("coverage") or 0.0) * 100.0
