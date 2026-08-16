@@ -17,6 +17,7 @@ on:
       - "scripts/update_vegetation_spatial.py"
       - "scripts/run_vegetation_spatial_chunked.py"
       - ".github/workflows/update_vegetation_spatial.yml"
+      - "requirements.txt"
       - "data/static/project_boundary.kml.gz"
       - "data/static/boundaries/**"
   schedule:
@@ -76,4 +77,4 @@ jobs:
 # from the native 10 m analysis. The analytical boundary is the SERPRO Project Area.
 # Adaptive period: requested 90/180/365 days, expanded until direct valid coverage reaches 90%,
 # then spatial gap filling is applied so the web layer has complete Project Area coverage.
-# Earth Engine FeatureCollection retrieval is chunked to avoid long-lived getInfo connections.
+# Earth Engine spatial retrieval uses paginated computeFeatures rather than a single getInfo response.
