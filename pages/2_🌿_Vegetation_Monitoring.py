@@ -98,6 +98,62 @@ st.markdown(
 .vm-mini-label {{ color:var(--vm-muted); font-size:.66rem; font-weight:850; text-transform:uppercase; }}
 .vm-mini-value {{ color:var(--vm-ink); font-size:1.05rem; font-weight:950; margin-top:3px; }}
 .vm-footer {{ background:linear-gradient(90deg,#f1faf7,#fff7f1); border:1px solid var(--vm-border); border-radius:14px; padding:12px 14px; color:var(--vm-muted); font-size:.72rem; line-height:1.5; }}
+
+
+/* Vegetation dashboard readability guard: UI only. */
+html, body,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="stMainBlockContainer"],
+[data-testid="stVerticalBlock"],
+[data-testid="stMarkdownContainer"] {
+  color: var(--vm-ink) !important;
+}
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stMarkdownContainer"] label,
+[data-testid="stMarkdownContainer"] div {
+  color: inherit;
+}
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] span {
+  color: var(--vm-ink) !important;
+  font-weight: 700 !important;
+}
+[data-baseweb="select"] *,
+[data-baseweb="input"] * {
+  color: var(--vm-ink) !important;
+}
+[data-testid="stExpander"] {
+  background: #ffffff !important;
+  border: 1px solid var(--vm-border) !important;
+  border-radius: 14px !important;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span {
+  color: var(--vm-ink) !important;
+  font-weight: 850 !important;
+}
+/* Native Streamlit dataframes can inherit a dark table palette. Keep them
+   readable if an observation table is expanded. */
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--vm-border) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+}
+[data-testid="stDataFrame"] iframe {
+  background: #ffffff !important;
+}
+.stPlotlyChart {
+  border: 1px solid var(--vm-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -135,7 +191,7 @@ st.markdown(
   <div class="vm-eyebrow">SERPRO PROJECT · REMOTE SENSING MRV</div>
   <div class="vm-title">🌿 Vegetation Monitoring</div>
   <div class="vm-subtitle">Monitor vegetation vigor, canopy moisture and spatial stress across the SERPRO Project Area using Sentinel-2.</div>
-  <span class="vm-meta">10 m analysis · 100 m web display · 250 m spatial overview</span>
+  <span class="vm-meta">10 m analysis · 100 m web display · 250 m spatial overview · dashboard v2</span>
 </div>
 """,
     unsafe_allow_html=True,
