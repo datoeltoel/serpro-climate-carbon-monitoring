@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Isolated dashboard UI patch: does not touch the Earth Engine data pipeline.
 path = Path("pages/2_🌿_Vegetation_Monitoring.py")
 text = path.read_text(encoding="utf-8")
 
