@@ -6,9 +6,8 @@ PAGE = Path("pages/2_🌿_Vegetation_Monitoring.py")
 def main():
     text = PAGE.read_text(encoding="utf-8")
 
-    # Force the vegetation page to remain readable even if Streamlit's global
-    # theme changes. This is UI-only and does not touch analytical data or map
-    # generation logic.
+    # UI-only patch. The dashboard page uses an f-string for its main CSS,
+    # therefore literal CSS braces must be doubled before insertion.
     css = r'''
 
 /* Vegetation dashboard readability guard: UI only. */
@@ -17,63 +16,65 @@ html, body,
 [data-testid="stMain"],
 [data-testid="stMainBlockContainer"],
 [data-testid="stVerticalBlock"],
-[data-testid="stMarkdownContainer"] {
+[data-testid="stMarkdownContainer"] {{
   color: var(--vm-ink) !important;
-}
+}}
 [data-testid="stMarkdownContainer"] p,
 [data-testid="stMarkdownContainer"] li,
 [data-testid="stMarkdownContainer"] span,
 [data-testid="stMarkdownContainer"] label,
-[data-testid="stMarkdownContainer"] div {
+[data-testid="stMarkdownContainer"] div {{
   color: inherit;
-}
+}}
 [data-testid="stWidgetLabel"] p,
-[data-testid="stWidgetLabel"] span {
+[data-testid="stWidgetLabel"] span {{
   color: var(--vm-ink) !important;
   font-weight: 700 !important;
-}
+}}
 [data-baseweb="select"] *,
-[data-baseweb="input"] * {
+[data-baseweb="input"] * {{
   color: var(--vm-ink) !important;
-}
-[data-testid="stExpander"] {
+}}
+[data-testid="stExpander"] {{
   background: #ffffff !important;
   border: 1px solid var(--vm-border) !important;
   border-radius: 14px !important;
-}
+}}
 [data-testid="stExpander"] summary,
 [data-testid="stExpander"] summary p,
-[data-testid="stExpander"] summary span {
+[data-testid="stExpander"] summary span {{
   color: var(--vm-ink) !important;
   font-weight: 850 !important;
-}
-/* Native Streamlit dataframes can inherit a dark table palette. Keep them
-   readable if an observation table is expanded. */
-[data-testid="stDataFrame"] {
+}}
+[data-testid="stDataFrame"] {{
   border: 1px solid var(--vm-border) !important;
   border-radius: 12px !important;
   overflow: hidden !important;
   background: #ffffff !important;
-}
-[data-testid="stDataFrame"] iframe {
+}}
+[data-testid="stDataFrame"] iframe {{
   background: #ffffff !important;
-}
-.stPlotlyChart {
+}}
+.stPlotlyChart {{
   border: 1px solid var(--vm-border);
   border-radius: 14px;
   overflow: hidden;
   background: #ffffff;
-}
+}}
 '''
 
-    if "Vegetation dashboard readability guard" not in text:
-        marker = "</style>"
-        if marker not in text:
-            raise RuntimeError("Vegetation dashboard style block not found")
-        text = text.replace(marker, css + "\n" + marker, 1)
+    marker = "/* Vegetation dashboard readability guard: UI only. */"
+    style_end = text.find("</style>")
+    if style_end < 0:
+        raise RuntimeError("Vegetation dashboard style block not found")
 
-    # Make the dashboard version explicit so a stale Streamlit deployment is
-    # easy to distinguish after redeploy.
+    if marker in text:
+        start = text.index(marker)
+        text = text[:start] + css.strip("\n") + "\n\n" + text[style_end:]
+    else:
+        text = text[:style_end] + css + text[style_end:]
+
+    # Keep a visible deployment marker without changing analytical behavior.
     old = '<span class="vm-meta">10 m analysis · 100 m web display · 250 m spatial overview</span>'
     new = '<span class="vm-meta">10 m analysis · 100 m web display · 250 m spatial overview · dashboard v2</span>'
     if old in text and new not in text:
@@ -85,4 +86,4 @@ html, body,
 if __name__ == "__main__":
     main()
 
-# UI redeploy marker: keep this file change-only; analytical pipeline untouched.
+# UI redeploy marker: analytical vegetation pipeline remains untouched.
