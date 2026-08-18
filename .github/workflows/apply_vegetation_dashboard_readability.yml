@@ -1,0 +1,38 @@
+name: Apply Vegetation Dashboard Readability
+
+on:
+  push:
+    paths:
+      - ".streamlit/config.toml"
+      - "scripts/fix_vegetation_dashboard_readability.py"
+      - ".github/workflows/apply_vegetation_dashboard_readability.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch-dashboard:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Apply readability patch
+        run: python scripts/fix_vegetation_dashboard_readability.py
+      - name: Validate Python syntax
+        run: python -m py_compile "pages/2_🌿_Vegetation_Monitoring.py"
+      - name: Commit dashboard patch
+        run: |
+          if git diff --quiet -- "pages/2_🌿_Vegetation_Monitoring.py"; then
+            echo "No dashboard changes to commit."
+            exit 0
+          fi
+          git add "pages/2_🌿_Vegetation_Monitoring.py"
+          git commit -m "fix: improve vegetation dashboard text readability"
+          git push
