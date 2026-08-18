@@ -145,6 +145,8 @@ def safe_spatial_features():
         if geom.get("type") not in ("Polygon", "MultiPolygon"): continue
         props = dict(feature.get("properties") or {})
         props.setdefault("ndvi", None); props.setdefault("ndmi", None); props.setdefault("stress", "STABLE")
+        props.setdefault("analysis_year", None); props.setdefault("analysis_start", None); props.setdefault("analysis_end", None)
+        props.setdefault("observed_pct", None); props.setdefault("temporal_fallback_pct", None); props.setdefault("spatial_interpolation_pct", None)
         clean.append({"type":"Feature", "geometry":geom, "properties":props})
     return {"type":"FeatureCollection", "features":clean}
 
@@ -191,6 +193,41 @@ def build_vegetation_map():
         add_layer("ndvi", "🌿 NDVI · overview fallback", True)
         add_layer("ndmi", "💧 NDMI · overview fallback", False)
         add_layer("stress", "⚠️ Stress · overview fallback", False)
+
+    # Clickable information layer for the rendered vegetation web map.
+    # The raster remains the 100 m web display derived from the native 10 m analysis.
+    # Popup attributes intentionally come from the 250 m Spatial Overview summary.
+    info_data = safe_spatial_features()
+    if info_data.get("features"):
+        popup_fields = [
+            "ndvi", "ndmi", "stress", "analysis_year", "analysis_start", "analysis_end",
+            "observed_pct", "temporal_fallback_pct", "spatial_interpolation_pct",
+        ]
+        popup_aliases = [
+            "NDVI", "NDMI", "Vegetation Stress", "Analysis Year", "Analysis Start", "Analysis End",
+            "Directly Observed (%)", "Temporal Fallback (%)", "Spatial Interpolation (%)",
+        ]
+        popup = folium.GeoJsonPopup(
+            fields=popup_fields, aliases=popup_aliases, localize=True, labels=True, sticky=False,
+            max_width=360,
+            style="background-color: white;",
+        )
+        folium.GeoJson(
+            info_data,
+            name="📍 Vegetation cell info · click",
+            style_function=lambda _: {
+                "fillColor": "#ffffff", "fillOpacity": 0.001, "color": "#ffffff",
+                "weight": 0, "opacity": 0,
+            },
+            highlight_function=lambda _: {"fillColor": "#ffffff", "fillOpacity": 0.10, "weight": 1, "color": "#ffffff", "opacity": 0.35},
+            tooltip=folium.GeoJsonTooltip(
+                fields=["ndvi", "ndmi", "stress"],
+                aliases=["NDVI", "NDMI", "Stress"],
+                localize=True, sticky=False,
+                labels=True,
+            ),
+            show=True,
+        ).add_child(popup).add_to(m)
 
     if bounds: m.fit_bounds(bounds, padding=(10, 10))
     folium.LayerControl(collapsed=False).add_to(m)
