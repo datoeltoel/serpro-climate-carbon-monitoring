@@ -17,7 +17,9 @@ OUTPUT = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojs
 S2 = "COPERNICUS/S2_SR_HARMONIZED"
 MAX_CLOUDY_PIXEL_PERCENTAGE = 40
 ANALYSIS_SCALE_M = 10
-DISPLAY_GRID_M = 250
+# Keep the Sentinel-2 analysis at 10 m, but use a lighter 50 m grid for web rendering.
+# This reduces GeoJSON payload size while preserving the analytical resolution.
+DISPLAY_GRID_M = 50
 COVERAGE_SCALE_M = 250
 ANALYSIS_CRS = "EPSG:32749"
 OUTPUT_CRS = "EPSG:4326"
@@ -148,6 +150,7 @@ def main() -> None:
     spatial_pct = min(100.0, mask_percentage(missing_mask, region))
     total_coverage = 100.0
 
+    # Analytical aggregation remains 10 m; only the exported web grid is 50 m.
     grid = region.coveringGrid(ee.Projection(ANALYSIS_CRS).atScale(DISPLAY_GRID_M)).filterBounds(region)
     grid = grid.map(lambda feature: feature.intersection(region, TRANSFORM_ERROR_MARGIN_M))
     result = filled.reduceRegions(collection=grid, reducer=ee.Reducer.mean(), scale=ANALYSIS_SCALE_M, crs=ANALYSIS_CRS, tileScale=8)
@@ -180,7 +183,6 @@ def main() -> None:
             "ndvi": ndvi,
             "ndmi": ndmi,
             "stress": stress,
-            # Compatibility aliases for map renderers / future clients.
             "NDVI": ndvi,
             "NDMI": ndmi,
             "STRESS": stress,
