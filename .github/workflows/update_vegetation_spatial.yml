@@ -15,9 +15,6 @@ on:
   push:
     paths:
       - "scripts/update_vegetation_spatial.py"
-      - "scripts/apply_vegetation_map_popup.py"
-      - "pages/2_🌿_Vegetation_Monitoring.py"
-      - ".github/workflows/update_vegetation_spatial.yml"
       - "requirements.txt"
       - "data/static/project_boundary.kml.gz"
       - "data/static/boundaries/**"
@@ -32,42 +29,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apply-map-popup:
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, 'add clickable vegetation web map popup') && hashFiles('scripts/apply_vegetation_map_popup.py') != ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout latest main
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: main
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Apply vegetation web map popup
-        run: python scripts/apply_vegetation_map_popup.py
-
-      - name: Validate Streamlit page syntax
-        run: python -m py_compile 'pages/2_🌿_Vegetation_Monitoring.py'
-
-      - name: Commit popup update
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm scripts/apply_vegetation_map_popup.py .github/workflows/apply_vegetation_map_popup.yml 2>/dev/null || true
-          git add 'pages/2_🌿_Vegetation_Monitoring.py'
-          if git diff --cached --quiet; then
-            echo "No popup changes to commit."
-            exit 0
-          fi
-          git commit -m "feat: add clickable vegetation web map popup"
-          git push origin HEAD:main
-
   spatial-vegetation:
-    if: github.event_name != 'push' || !contains(github.event.head_commit.message, 'add clickable vegetation web map popup')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout latest main
@@ -133,4 +95,5 @@ jobs:
 # Native Sentinel-2 analysis remains 10 m.
 # Spatial overview is retained as a 250 m GeoJSON summary.
 # The interactive dashboard map uses a compact 100 m raster generated from the native 10 m surface.
+# UI-only changes to the Streamlit page do not trigger the Earth Engine generation job.
 # No 50 m/100 m polygon grid is retrieved from Earth Engine, avoiding the previous toList/getInfo timeout.
