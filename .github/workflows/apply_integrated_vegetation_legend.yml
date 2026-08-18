@@ -1,0 +1,35 @@
+name: Apply Integrated Vegetation Legend
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply integrated legend and popup patch
+        run: python scripts/apply_integrated_vegetation_legend.py
+      - name: Validate Streamlit page syntax
+        run: python -m py_compile 'pages/2_🌿_Vegetation_Monitoring.py'
+      - name: Commit final patch and remove patcher
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'pages/2_🌿_Vegetation_Monitoring.py'
+          git rm 'scripts/apply_integrated_vegetation_legend.py' '.github/workflows/apply_integrated_vegetation_legend.yml'
+          git commit -m 'feat: integrate vegetation legend with map popups'
+          git push origin HEAD:main
