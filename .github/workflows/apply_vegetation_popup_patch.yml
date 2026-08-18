@@ -1,0 +1,39 @@
+name: Apply Vegetation Popup Patch
+
+on:
+  push:
+    paths:
+      - "scripts/patch_vegetation_popup_click.py"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply popup patch
+        run: python scripts/patch_vegetation_popup_click.py
+
+      - name: Validate Streamlit page syntax
+        run: python -m py_compile 'pages/2_🌿_Vegetation_Monitoring.py'
+
+      - name: Commit UI patch and remove patch tooling
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 'pages/2_🌿_Vegetation_Monitoring.py'
+          git rm scripts/patch_vegetation_popup_click.py .github/workflows/apply_vegetation_popup_patch.yml
+          git commit -m "fix: enable clickable vegetation map popups"
+          git push origin HEAD:main
