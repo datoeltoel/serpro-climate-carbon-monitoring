@@ -59,33 +59,41 @@ jobs:
           SPATIAL_PERIOD_DAYS: ${{ inputs.period_days || '90' }}
         run: python scripts/update_vegetation_spatial.py
 
-      - name: Validate generated GeoJSON
+      - name: Validate generated spatial outputs
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          p = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
-          data = json.loads(p.read_text(encoding="utf-8"))
+          geo = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
+          raster = Path("data/processed/climate/vegetation/vegetation_spatial_raster.json")
+          data = json.loads(geo.read_text(encoding="utf-8"))
           features = data.get("features", [])
           if not features:
               raise SystemExit("Generated GeoJSON contains no features")
-          print(f"GeoJSON validation OK: {len(features)} features")
+          rp = json.loads(raster.read_text(encoding="utf-8"))
+          required = {"ndvi", "ndmi", "stress"}
+          if rp.get("web_display_scale_m") != 100:
+              raise SystemExit(f"Unexpected web display scale: {rp.get('web_display_scale_m')}")
+          if rp.get("analysis_scale_m") != 10:
+              raise SystemExit(f"Unexpected analysis scale: {rp.get('analysis_scale_m')}")
+          if not required.issubset(set((rp.get("layers") or {}).keys())):
+              raise SystemExit("Raster package is missing NDVI/NDMI/stress layers")
+          print(f"Spatial outputs OK: overview_features={len(features)}, analysis=10m, web_raster=100m")
           PY
 
       - name: Commit and push spatial vegetation data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/processed/climate/vegetation/vegetation_spatial_latest.geojson
+          git add data/processed/climate/vegetation/vegetation_spatial_latest.geojson data/processed/climate/vegetation/vegetation_spatial_raster.json
           if git diff --cached --quiet; then
             echo "No spatial vegetation data changes to commit."
             exit 0
           fi
-          git commit -m "data: update spatial vegetation layer"
+          git commit -m "data: update spatial vegetation overview and 100m web raster"
           git push origin HEAD:main
 
-# Spatial analysis: WGS 84 / UTM 49S (EPSG:32749), native Sentinel-2 analysis scale 10 m.
-# Web GeoJSON output uses a 250 m display grid for performance while each cell value is
-# calculated from the native 10 m analysis. The analytical boundary is the complete SERPRO Project Area.
-# Retrieval uses bounded toList pages with retries instead of one large computeFeatures response.
-# The complete Project Area is therefore preserved while the synchronous response size stays small.
+# Native Sentinel-2 analysis remains 10 m.
+# Spatial overview is retained as a 250 m GeoJSON summary.
+# The interactive dashboard map uses a compact 100 m raster generated from the native 10 m surface.
+# No 50 m/100 m polygon grid is retrieved from Earth Engine, avoiding the previous toList/getInfo timeout.
