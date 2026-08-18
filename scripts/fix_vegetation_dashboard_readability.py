@@ -6,8 +6,6 @@ PAGE = Path("pages/2_🌿_Vegetation_Monitoring.py")
 def main():
     text = PAGE.read_text(encoding="utf-8")
 
-    # UI-only patch. The dashboard page uses an f-string for its main CSS,
-    # therefore literal CSS braces must be doubled before insertion.
     css = r'''
 
 /* Vegetation dashboard readability guard: UI only. */
@@ -75,14 +73,13 @@ html, body,
     style_end = text.find("</style>")
     if style_end < 0:
         raise RuntimeError("Vegetation dashboard style block not found")
-
     if marker in text:
         start = text.index(marker)
         text = text[:start] + css.strip("\n") + "\n\n" + text[style_end:]
     else:
         text = text[:style_end] + css + text[style_end:]
 
-    # Replace the interpretation area with a single, unambiguous stress-status card.
+    # Replace the interpretation area with one clear vegetation-stress card.
     start_marker = "with interpretation_col:\n"
     end_marker = "\nst.markdown('<div class=\"vm-section-title\">📋 Monitoring details</div>'"
     start = text.find(start_marker)
@@ -90,10 +87,20 @@ html, body,
     if start < 0 or end < 0:
         raise RuntimeError("Current interpretation block not found")
 
-    stress_block = '''with interpretation_col:\n    st.markdown('<div class="vm-card"><div class="vm-card-title">🚨 Vegetation Stress Status</div><div class="vm-card-caption">A simple screening status based on recent NDVI and NDMI change.</div>', unsafe_allow_html=True)\n    stress_note = {\n        "HIGH": "Both NDVI and NDMI declined by at least 10% in the last 30 days. Field verification is recommended.",\n        "MODERATE": "At least one indicator declined by at least 10% in the last 30 days. Review the spatial pattern.",\n        "LOW": "A recent decline is present, but the moderate threshold has not been reached.",\n        "STABLE": "No negative NDVI/NDMI trend signal was detected under the current screening rules.",\n    }[stress_level]\n    stress_class = {"HIGH": "vm-high", "MODERATE": "vm-medium", "LOW": "vm-low", "STABLE": "vm-low"}[stress_level]\n    st.markdown(f'<div class="vm-stress-card"><div class="vm-stress-label">Screening status</div><div class="vm-stress-value">{stress_level}</div><div class="vm-badge {stress_class}">{stress_level.title()} stress</div><div class="vm-stress-note">{stress_note}</div></div></div>', unsafe_allow_html=True)\n'''
+    stress_block = '''with interpretation_col:
+    st.markdown('<div class="vm-card"><div class="vm-card-title">🚨 Vegetation Stress Status</div><div class="vm-card-caption">A simple screening status based on recent NDVI and NDMI change.</div>', unsafe_allow_html=True)
+    stress_note = {
+        "HIGH": "Both NDVI and NDMI declined by at least 10% in the last 30 days. Field verification is recommended.",
+        "MODERATE": "At least one indicator declined by at least 10% in the last 30 days. Review the spatial pattern.",
+        "LOW": "A recent decline is present, but the moderate threshold has not been reached.",
+        "STABLE": "No negative NDVI/NDMI trend signal was detected under the current screening rules.",
+    }[stress_level]
+    stress_class = {"HIGH": "vm-high", "MODERATE": "vm-medium", "LOW": "vm-low", "STABLE": "vm-low"}[stress_level]
+    st.markdown(f'<div class="vm-stress-card"><div class="vm-stress-label">Screening status</div><div class="vm-stress-value">{stress_level}</div><div class="vm-badge {stress_class}">{stress_level.title()} stress</div><div class="vm-stress-note">{stress_note}</div></div></div>', unsafe_allow_html=True)
+'''
     text = text[:start] + stress_block + text[end:]
 
-    # Replace observation expander with a visible observation section and downloads.
+    # Replace the observation expander with visible tables and Excel/CSV downloads.
     obs_start_marker = 'with st.expander("🗃️ Observation data", expanded=False):\n'
     obs_end_marker = '\nif spatial.get("features"):\n'
     obs_start = text.find(obs_start_marker)
@@ -101,10 +108,44 @@ html, body,
     if obs_start < 0 or obs_end < 0:
         raise RuntimeError("Observation data block not found")
 
-    obs_block = '''st.markdown('<div class="vm-section-title">📋 Observation Data</div>', unsafe_allow_html=True)\nst.markdown('<div class="vm-section-caption">Latest available NDVI and NDMI observations for the selected monitoring area and period.</div>', unsafe_allow_html=True)\n\n# Prepare export tables without changing the source data or analytical pipeline.\nndvi_export = ndvi_p.sort_values("date", ascending=False).copy()\nndmi_export = ndmi_p.sort_values("date", ascending=False).copy()\ncombined_export = pd.concat(\n    [\n        ndvi_export.assign(indicator="NDVI", value=ndvi_export.get("ndvi")),\n        ndmi_export.assign(indicator="NDMI", value=ndmi_export.get("ndmi")),\n    ],\n    ignore_index=True,\n)\n\nexport_csv = combined_export.to_csv(index=False).encode("utf-8-sig")\nfrom io import BytesIO\nexcel_buffer = BytesIO()\nwith pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:\n    ndvi_export.to_excel(writer, sheet_name="NDVI", index=False)\n    ndmi_export.to_excel(writer, sheet_name="NDMI", index=False)\n    combined_export.to_excel(writer, sheet_name="Combined", index=False)\nexcel_buffer.seek(0)\n\nbutton_col, csv_col, excel_col = st.columns([2.2, 1, 1], gap="small")\nwith button_col:\n    st.markdown('<div class="vm-download"><strong>Download observation data</strong><br><span class="vm-note">Excel contains NDVI, NDMI and Combined sheets.</span></div>', unsafe_allow_html=True)\nwith csv_col:\n    st.download_button("⬇️ CSV", data=export_csv, file_name="SERPRO_Vegetation_Observations.csv", mime="text/csv", use_container_width=True)\nwith excel_col:\n    st.download_button("⬇️ Excel", data=excel_buffer.getvalue(), file_name="SERPRO_Vegetation_Observations.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)\n\nobs1, obs2 = st.tabs(["NDVI observations", "NDMI observations"])\nwith obs1:\n    st.dataframe(ndvi_export, use_container_width=True, hide_index=True)\nwith obs2:\n    st.dataframe(ndmi_export, use_container_width=True, hide_index=True)\n'''
+    obs_block = '''st.markdown('<div class="vm-section-title">📋 Observation Data</div>', unsafe_allow_html=True)
+st.markdown('<div class="vm-section-caption">Latest available NDVI and NDMI observations for the selected monitoring area and period.</div>', unsafe_allow_html=True)
+
+ndvi_export = ndvi_p.sort_values("date", ascending=False).copy()
+ndmi_export = ndmi_p.sort_values("date", ascending=False).copy()
+combined_export = pd.concat(
+    [
+        ndvi_export.assign(indicator="NDVI", value=ndvi_export.get("ndvi")),
+        ndmi_export.assign(indicator="NDMI", value=ndmi_export.get("ndmi")),
+    ],
+    ignore_index=True,
+)
+
+export_csv = combined_export.to_csv(index=False).encode("utf-8-sig")
+from io import BytesIO
+excel_buffer = BytesIO()
+with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+    ndvi_export.to_excel(writer, sheet_name="NDVI", index=False)
+    ndmi_export.to_excel(writer, sheet_name="NDMI", index=False)
+    combined_export.to_excel(writer, sheet_name="Combined", index=False)
+excel_buffer.seek(0)
+
+button_col, csv_col, excel_col = st.columns([2.2, 1, 1], gap="small")
+with button_col:
+    st.markdown('<div class="vm-download"><strong>Download observation data</strong><br><span class="vm-note">Excel contains NDVI, NDMI and Combined sheets.</span></div>', unsafe_allow_html=True)
+with csv_col:
+    st.download_button("⬇️ CSV", data=export_csv, file_name="SERPRO_Vegetation_Observations.csv", mime="text/csv", use_container_width=True)
+with excel_col:
+    st.download_button("⬇️ Excel", data=excel_buffer.getvalue(), file_name="SERPRO_Vegetation_Observations.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
+obs1, obs2 = st.tabs(["NDVI observations", "NDMI observations"])
+with obs1:
+    st.dataframe(ndvi_export, use_container_width=True, hide_index=True)
+with obs2:
+    st.dataframe(ndmi_export, use_container_width=True, hide_index=True)
+'''
     text = text[:obs_start] + obs_block + text[obs_end:]
 
-    # Keep the dashboard marker while making clear that the map/analysis pipeline is unchanged.
     old = '<span class="vm-meta">10 m analysis · 100 m web display · 250 m spatial overview</span>'
     new = '<span class="vm-meta">10 m analysis · 100 m web display · 250 m spatial overview · stress status · data download</span>'
     if old in text:
