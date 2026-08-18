@@ -4,9 +4,16 @@ import folium
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from folium.raster_layers import ImageOverlay
 from streamlit_folium import st_folium
 
-from utils.climate.vegetation import load_ndmi, load_ndvi, load_vegetation_spatial
+from utils.climate.vegetation import (
+    load_ndmi,
+    load_ndvi,
+    load_vegetation_spatial,
+    load_vegetation_spatial_raster,
+    raster_data_uri,
+)
 from utils.map import load_carbon_project_zone, load_project_area
 from utils.ui import setup_page
 
@@ -15,8 +22,7 @@ setup_page()
 st.markdown("""
 <style>
 .vm-hero{padding:4px 0 12px}.vm-muted{color:#64748b;font-size:.84rem}
-.vm-kpi{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:13px 14px;min-height:108px;box-shadow:0 2px 9px rgba(15,23,42,.05)}
-.vm-kpi-label{font-size:.70rem;color:#64748b;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.vm-kpi-value{font-size:1.45rem;font-weight:850;line-height:1.15;margin-top:7px;color:#0f172a}.vm-kpi-sub{font-size:.74rem;margin-top:7px;font-weight:700}
+.vm-kpi{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:13px 14px;min-height:108px;box-shadow:0 2px 9px rgba(15,23,42,.05)}.vm-kpi-label{font-size:.70rem;color:#64748b;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.vm-kpi-value{font-size:1.45rem;font-weight:850;line-height:1.15;margin-top:7px;color:#0f172a}.vm-kpi-sub{font-size:.74rem;margin-top:7px;font-weight:700}
 .vm-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:16px;box-shadow:0 3px 12px rgba(15,23,42,.05)}.vm-card-title{font-size:1rem;font-weight:850;color:#0f172a;margin-bottom:10px}
 .vm-section{font-size:.68rem;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:14px 0 7px}.vm-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid #eef2f7;font-size:.80rem}.vm-label{color:#64748b}.vm-value{color:#0f172a;font-weight:750;text-align:right}
 .vm-badge{border-radius:11px;padding:10px 12px;margin-top:12px;font-weight:850;font-size:.82rem}.vm-high{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}.vm-medium{background:#fef9c3;color:#854d0e;border:1px solid #fde68a}.vm-low{background:#ffedd5;color:#9a3412;border:1px solid #fed7aa}.vm-note{font-size:.75rem;color:#64748b;line-height:1.45}
@@ -32,6 +38,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 ndmi = load_ndmi()
 ndvi = load_ndvi()
 spatial = load_vegetation_spatial()
+raster = load_vegetation_spatial_raster()
 for df in (ndmi, ndvi):
     if not df.empty and "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -120,17 +127,12 @@ def bounds_from_geojson(collection):
     pts = []
     for feature in collection.get("features", []):
         geom = feature.get("geometry") or {}; coords = geom.get("coordinates", [])
-        if geom.get("type") == "Polygon":
-            rings = coords
-        elif geom.get("type") == "MultiPolygon":
-            rings = [ring for polygon in coords for ring in polygon]
-        else:
-            rings = []
+        if geom.get("type") == "Polygon": rings = coords
+        elif geom.get("type") == "MultiPolygon": rings = [ring for polygon in coords for ring in polygon]
+        else: rings = []
         for ring in rings:
-            if isinstance(ring, list):
-                pts.extend([p for p in ring if isinstance(p, (list, tuple)) and len(p) >= 2])
-    if not pts:
-        return None
+            if isinstance(ring, list): pts.extend([p for p in ring if isinstance(p, (list, tuple)) and len(p) >= 2])
+    if not pts: return None
     lons = [float(p[0]) for p in pts]; lats = [float(p[1]) for p in pts]
     return [[min(lats), min(lons)], [max(lats), max(lons)]]
 
@@ -138,11 +140,9 @@ def bounds_from_geojson(collection):
 def safe_spatial_features():
     clean = []
     for feature in spatial.get("features", []):
-        if not isinstance(feature, dict) or not feature.get("geometry"):
-            continue
+        if not isinstance(feature, dict) or not feature.get("geometry"): continue
         geom = feature.get("geometry") or {}
-        if geom.get("type") not in ("Polygon", "MultiPolygon"):
-            continue
+        if geom.get("type") not in ("Polygon", "MultiPolygon"): continue
         props = dict(feature.get("properties") or {})
         props.setdefault("ndvi", None); props.setdefault("ndmi", None); props.setdefault("stress", "STABLE")
         clean.append({"type":"Feature", "geometry":geom, "properties":props})
@@ -150,7 +150,6 @@ def safe_spatial_features():
 
 
 def build_vegetation_map():
-    data = safe_spatial_features()
     project_area = load_project_area()
     zone = load_carbon_project_zone()
     m = folium.Map(location=[-3.10, 112.62], zoom_start=9, tiles=None, control_scale=True)
@@ -161,27 +160,39 @@ def build_vegetation_map():
     if zone.get("features"):
         folium.GeoJson(zone, name="🟣 Carbon Project Zone · reference", style_function=lambda _: {"color":"#7c3aed","weight":2,"fillOpacity":0}).add_to(m)
 
-    def add_layer(field, label, show):
-        layer_data = {"type":"FeatureCollection", "features":[{"type":"Feature","geometry":f["geometry"],"properties":dict(f.get("properties") or {})} for f in data["features"]]}
-        def style(feature):
-            p = feature.get("properties", {}); value = p.get(field)
-            if field == "stress":
-                color = {"HIGH":"#dc2626","MODERATE":"#f59e0b","LOW":"#eab308","STABLE":"#16a34a"}.get(str(value),"#94a3b8")
-            else:
-                try:
-                    x = float(value)
-                    if field == "ndvi": color = "#b91c1c" if x < .30 else "#f59e0b" if x < .50 else "#84cc16" if x < .70 else "#15803d"
-                    else: color = "#b91c1c" if x < 0 else "#f59e0b" if x < .20 else "#84cc16" if x < .40 else "#15803d"
-                except (TypeError, ValueError): color = "#94a3b8"
-            return {"fillColor":color,"color":color,"weight":0.35,"fillOpacity":0.72}
-        folium.GeoJson(layer_data, name=label, style_function=style, show=show).add_to(m)
+    bounds = raster.get("bounds") or bounds_from_geojson(project_area)
+    layers = raster.get("layers", {})
+    if raster and bounds and layers:
+        labels = [("ndvi", "🌿 NDVI · YTD vigor", True, 0.78), ("ndmi", "💧 NDMI · YTD moisture", False, 0.78), ("stress", "⚠️ Vegetation stress · YTD", False, 0.70)]
+        for key, label, show, opacity in labels:
+            packed = layers.get(key)
+            if packed:
+                ImageOverlay(
+                    image=raster_data_uri(packed), bounds=bounds, opacity=opacity,
+                    name=label, show=show, interactive=False, cross_origin=False,
+                    zindex=2, pixelated=False,
+                ).add_to(m)
+    else:
+        # Graceful fallback to the existing 250 m spatial overview if the raster package
+        # has not yet been generated by GitHub Actions.
+        data = safe_spatial_features()
+        def add_layer(field, label, show):
+            def style(feature):
+                p = feature.get("properties", {}); value = p.get(field)
+                if field == "stress": color = {"HIGH":"#dc2626","MODERATE":"#f59e0b","LOW":"#eab308","STABLE":"#16a34a"}.get(str(value),"#94a3b8")
+                else:
+                    try:
+                        x = float(value)
+                        if field == "ndvi": color = "#b91c1c" if x < .30 else "#f59e0b" if x < .50 else "#84cc16" if x < .70 else "#15803d"
+                        else: color = "#b91c1c" if x < 0 else "#f59e0b" if x < .20 else "#84cc16" if x < .40 else "#15803d"
+                    except (TypeError, ValueError): color = "#94a3b8"
+                return {"fillColor":color,"color":color,"weight":0.25,"fillOpacity":0.68}
+            folium.GeoJson(data, name=label, style_function=style, show=show).add_to(m)
+        add_layer("ndvi", "🌿 NDVI · overview fallback", True)
+        add_layer("ndmi", "💧 NDMI · overview fallback", False)
+        add_layer("stress", "⚠️ Stress · overview fallback", False)
 
-    add_layer("ndvi", "🌿 NDVI · annual YTD vigor", True)
-    add_layer("ndmi", "💧 NDMI · annual YTD moisture", False)
-    add_layer("stress", "⚠️ Vegetation stress · annual YTD", False)
-    bounds = bounds_from_geojson(project_area)
-    if bounds:
-        m.fit_bounds(bounds, padding=(10, 10))
+    if bounds: m.fit_bounds(bounds, padding=(10, 10))
     folium.LayerControl(collapsed=False).add_to(m)
     return m
 
@@ -200,22 +211,22 @@ def quality_panel(props):
 
 
 st.markdown("### 🗺️ Spatial Vegetation Condition")
-if spatial.get("features"):
-    props = spatial["features"][0].get("properties", {})
+if spatial.get("features") or raster:
+    props = spatial["features"][0].get("properties", {}) if spatial.get("features") else raster
     map_col, info_col = st.columns([2.15, 1], gap="medium")
     with map_col:
         try:
             fmap = build_vegetation_map()
             st_folium(fmap, width=700, height=540, returned_objects=[], key="vegetation_spatial_map", use_container_width=True)
-        except Exception:
+        except Exception as exc:
             st.error("Spatial map could not be rendered. The vegetation analysis remains available below.")
-            st.caption("The map has been isolated from the dashboard calculations; please refresh once after the spatial layer update completes.")
+            st.caption(f"Map rendering is isolated from the dashboard calculations. {exc}")
     with info_col:
         st.markdown('<div class="vm-card"><div class="vm-card-title">📊 Spatial Analysis Overview</div>', unsafe_allow_html=True)
         year = int(props.get("analysis_year") or date.today().year)
         start_text = props.get("analysis_start") or f"{year}-01-01"; end_text = props.get("analysis_end") or "—"
-        scenes = int(props.get("scene_count") or 0); cloud = float(props.get("mean_cloud_cover_pct") or 0); grid = int(props.get("display_grid_m") or 100)
-        rows = [("Analysis period",f"{start_text} → {end_text}"),("Composite",f"{year} year-to-date median"),("Spatial resolution","10 × 10 m analysis"),("Web display grid",f"{grid} m"),("Analysis boundary","SERPRO Project Area · AOI"),("Reference boundary","Carbon Project Zone"),("Sentinel-2 scenes",f"{scenes:,}"),("Mean cloud cover",f"{cloud:.1f}%"),("Method","Annual YTD + spatial gap fill")]
+        scenes = int(props.get("scene_count") or 0); cloud = float(props.get("mean_cloud_cover_pct") or 0)
+        rows = [("Analysis period",f"{start_text} → {end_text}"),("Composite",f"{year} year-to-date median"),("Spatial resolution","10 × 10 m analysis"),("Web display","100 m raster"),("Spatial overview","250 m GeoJSON"),("Analysis boundary","SERPRO Project Area · AOI"),("Reference boundary","Carbon Project Zone"),("Sentinel-2 scenes",f"{scenes:,}"),("Mean cloud cover",f"{cloud:.1f}%"),("Method","Annual YTD + spatial gap fill")]
         for label, value in rows:
             st.markdown(f'<div class="vm-row"><span class="vm-label">{label}</span><span class="vm-value">{value}</span></div>', unsafe_allow_html=True)
         st.markdown('<div class="vm-section">Data Quality</div>', unsafe_allow_html=True)
@@ -256,4 +267,4 @@ with obs2: st.dataframe(ndmi_p.sort_values("date", ascending=False), use_contain
 if spatial.get("features"):
     st.markdown("### ℹ️ Data & Quality Notes")
     p = spatial["features"][0].get("properties", {})
-    st.info(f"Sentinel-2 SR Harmonized · native analysis scale 10 m · analytical boundary: SERPRO Project Area · year-to-date spatial composite: {int(p.get('analysis_year') or date.today().year)} · effective period {p.get('analysis_start','—')} to {p.get('analysis_end','—')} · mean scene cloud cover {float(p.get('mean_cloud_cover_pct') or 0):.1f}%. The spatial map provides switchable NDVI, NDMI and vegetation stress layers over OpenStreetMap or ESRI Satellite Imagery. Direct observations and spatial interpolation are reported separately in the Data Quality summary.")
+    st.info(f"Sentinel-2 SR Harmonized · native analysis scale 10 m · analytical boundary: SERPRO Project Area · year-to-date spatial composite: {int(p.get('analysis_year') or date.today().year)} · effective period {p.get('analysis_start','—')} to {p.get('analysis_end','—')} · mean scene cloud cover {float(p.get('mean_cloud_cover_pct') or 0):.1f}%. The map uses a 100 m raster web layer derived from the native 10 m analytical surface; the Spatial Analysis Overview remains available as a 250 m GeoJSON summary.")
