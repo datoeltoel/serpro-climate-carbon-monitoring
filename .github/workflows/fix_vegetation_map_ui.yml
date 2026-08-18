@@ -1,0 +1,40 @@
+name: Fix Vegetation Map UI
+
+on:
+  push:
+    paths:
+      - "scripts/fix_vegetation_map_interaction.py"
+
+permissions:
+  contents: write
+
+jobs:
+  patch-ui:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Apply vegetation map UI patch
+        run: python scripts/fix_vegetation_map_interaction.py
+
+      - name: Validate Python syntax
+        run: python -m py_compile "pages/2_🌿_Vegetation_Monitoring.py"
+
+      - name: Commit UI patch
+        run: |
+          if git diff --quiet -- "pages/2_🌿_Vegetation_Monitoring.py"; then
+            echo "No UI changes to commit."
+            exit 0
+          fi
+          git add "pages/2_🌿_Vegetation_Monitoring.py"
+          git commit -m "fix: make vegetation map popup clickable and add symbology legend"
+          git push
