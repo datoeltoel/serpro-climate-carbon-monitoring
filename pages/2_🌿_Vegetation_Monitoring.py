@@ -194,10 +194,45 @@ def build_vegetation_map():
         add_layer("ndmi", "💧 NDMI · overview fallback", False)
         add_layer("stress", "⚠️ Stress · overview fallback", False)
 
-    # Clickable information layer for the rendered vegetation web map.
-    # The raster remains the 100 m web display derived from the native 10 m analysis.
-    # Popup attributes intentionally come from the 250 m Spatial Overview summary.
+    # Clickable information layers for NDVI and NDMI.
+    # The rendered web map remains a 100 m raster derived from the native 10 m analysis.
+    # Click popups use the retained 250 m Spatial Overview summary as the attribute source.
     info_data = safe_spatial_features()
+    if info_data.get("features"):
+        def add_index_popup_layer(layer_name, title, fields, aliases):
+            popup = folium.GeoJsonPopup(
+                fields=fields, aliases=aliases, localize=True, labels=True, sticky=False,
+                max_width=360, style="background-color: white;",
+            )
+            tooltip = folium.GeoJsonTooltip(
+                fields=fields[:3], aliases=aliases[:3], localize=True, sticky=False, labels=True,
+            )
+            folium.GeoJson(
+                info_data,
+                name=layer_name,
+                style_function=lambda _: {
+                    "fillColor": "#ffffff", "fillOpacity": 0.001, "color": "#ffffff",
+                    "weight": 0, "opacity": 0,
+                },
+                highlight_function=lambda _: {
+                    "fillColor": "#ffffff", "fillOpacity": 0.10, "weight": 1,
+                    "color": "#ffffff", "opacity": 0.35,
+                },
+                tooltip=tooltip, show=True,
+            ).add_child(popup).add_to(m)
+
+        add_index_popup_layer(
+            "🌿 NDVI · click for value",
+            "NDVI",
+            ["ndvi", "analysis_year", "analysis_start", "analysis_end", "observed_pct", "temporal_fallback_pct", "spatial_interpolation_pct"],
+            ["NDVI", "Analysis Year", "Analysis Start", "Analysis End", "Directly Observed (%)", "Temporal Fallback (%)", "Spatial Interpolation (%)"],
+        )
+        add_index_popup_layer(
+            "💧 NDMI · click for value",
+            "NDMI",
+            ["ndmi", "analysis_year", "analysis_start", "analysis_end", "observed_pct", "temporal_fallback_pct", "spatial_interpolation_pct"],
+            ["NDMI", "Analysis Year", "Analysis Start", "Analysis End", "Directly Observed (%)", "Temporal Fallback (%)", "Spatial Interpolation (%)"],
+        )
     if info_data.get("features"):
         popup_fields = [
             "ndvi", "ndmi", "stress", "analysis_year", "analysis_start", "analysis_end",
