@@ -1,5 +1,7 @@
 """Load processed Sentinel-2 vegetation index data."""
 from pathlib import Path
+import base64
+import gzip
 import json
 import pandas as pd
 
@@ -7,6 +9,7 @@ NDMI_PATH = Path("data/processed/climate/vegetation/ndmi_daily.csv")
 NDVI_PATH = Path("data/processed/climate/vegetation/ndvi_daily.csv")
 NDVI_ANNUAL_PATH = Path("data/processed/climate/vegetation/ndvi_annual_2015_2025.csv")
 VEGETATION_SPATIAL_PATH = Path("data/processed/climate/vegetation/vegetation_spatial_latest.geojson")
+VEGETATION_RASTER_PATH = Path("data/processed/climate/vegetation/vegetation_spatial_raster.json")
 
 
 def _load(path: Path, value_col: str) -> pd.DataFrame:
@@ -39,10 +42,26 @@ def load_ndvi_annual() -> pd.DataFrame:
 
 
 def load_vegetation_spatial() -> dict:
-    """Return the latest actual Sentinel-2 spatial vegetation GeoJSON."""
+    """Return the latest Sentinel-2 spatial overview GeoJSON."""
     if not VEGETATION_SPATIAL_PATH.exists():
         return {"type": "FeatureCollection", "features": []}
     try:
         return json.loads(VEGETATION_SPATIAL_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {"type": "FeatureCollection", "features": []}
+
+
+def load_vegetation_spatial_raster() -> dict:
+    """Return the compact 100 m web raster package."""
+    if not VEGETATION_RASTER_PATH.exists():
+        return {}
+    try:
+        return json.loads(VEGETATION_RASTER_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def raster_data_uri(packed: str) -> str:
+    """Decode base64+gzip PNG payload into a browser-ready data URI."""
+    raw = gzip.decompress(base64.b64decode(packed))
+    return "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
