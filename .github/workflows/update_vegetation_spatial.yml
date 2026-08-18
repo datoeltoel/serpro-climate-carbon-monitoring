@@ -16,6 +16,7 @@ on:
     paths:
       - "scripts/update_vegetation_spatial.py"
       - "requirements.txt"
+      - ".github/workflows/update_vegetation_spatial.yml"
       - "data/static/project_boundary.kml.gz"
       - "data/static/boundaries/**"
   schedule:
