@@ -163,16 +163,25 @@ def build_web_raster(filled: ee.Image, region: ee.Geometry, year: int, start: da
     ndmi_img = filled.select("NDMI").visualize(
         min=-0.2, max=0.6, palette=["#b91c1c", "#f59e0b", "#84cc16", "#15803d"]
     )
+
+    # Build the stress classification from the already-masked Project Area
+    # surface. The previous implementation started from ee.Image(0), which
+    # produced an opaque green rectangle outside the Project Area. Starting from
+    # the masked NDVI surface preserves the Project Area mask in the PNG alpha
+    # channel so the web map is clipped visually to the AOI.
     stress_code = (
-        ee.Image(0).where(filled.select("NDVI").lte(0.5).Or(filled.select("NDMI").lte(0.2)), 2)
+        filled.select("NDVI")
+        .multiply(0)
+        .where(filled.select("NDVI").lte(0.5).Or(filled.select("NDMI").lte(0.2)), 2)
         .where(filled.select("NDVI").lte(0.5).And(filled.select("NDMI").lte(0.2)), 3)
         .rename("stress")
+        .clip(region)
     )
     stress_img = stress_code.visualize(
         min=0, max=3, palette=["#16a34a", "#eab308", "#f59e0b", "#dc2626"]
     )
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "analysis_scale_m": ANALYSIS_SCALE_M,
         "web_display_scale_m": WEB_DISPLAY_SCALE_M,
         "overview_grid_m": OVERVIEW_GRID_M,
@@ -190,11 +199,12 @@ def build_web_raster(filled: ee.Image, region: ee.Geometry, year: int, start: da
             "stress": pack_png(thumb_bytes(stress_img, common)),
         },
         "encoding": "base64+gzip+png",
+        "stress_clipped_to": "SERPRO Project Area",
         "updated_utc": datetime.now(timezone.utc).isoformat(),
     }
     RASTER_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     RASTER_OUTPUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
-    print(f"Wrote 100 m raster web layers: NDVI, NDMI, stress; bounds={map_bounds}")
+    print(f"Wrote 100 m raster web layers: NDVI, NDMI, stress clipped to Project Area; bounds={map_bounds}")
 
 
 def main() -> None:
@@ -226,8 +236,6 @@ def main() -> None:
     filled = composite.unmask(spatial_candidate, sameFootprint=False).unmask(regional_fill, sameFootprint=False).clip(region)
     spatial_pct = min(100.0, mask_percentage(missing_mask, region))
 
-    # The dashboard spatial overview remains a 250 m GeoJSON. Its values are still
-    # reduced from the native 10 m analytical surface.
     grid = region.coveringGrid(ee.Projection(ANALYSIS_CRS).atScale(OVERVIEW_GRID_M)).filterBounds(region)
     grid = grid.map(lambda feature: feature.intersection(region, TRANSFORM_ERROR_MARGIN_M))
     result = filled.reduceRegions(
