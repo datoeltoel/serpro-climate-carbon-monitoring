@@ -106,53 +106,51 @@ html, body,
 [data-testid="stMain"],
 [data-testid="stMainBlockContainer"],
 [data-testid="stVerticalBlock"],
-[data-testid="stMarkdownContainer"] {
+[data-testid="stMarkdownContainer"] {{
   color: var(--vm-ink) !important;
-}
+}}
 [data-testid="stMarkdownContainer"] p,
 [data-testid="stMarkdownContainer"] li,
 [data-testid="stMarkdownContainer"] span,
 [data-testid="stMarkdownContainer"] label,
-[data-testid="stMarkdownContainer"] div {
+[data-testid="stMarkdownContainer"] div {{
   color: inherit;
-}
+}}
 [data-testid="stWidgetLabel"] p,
-[data-testid="stWidgetLabel"] span {
+[data-testid="stWidgetLabel"] span {{
   color: var(--vm-ink) !important;
   font-weight: 700 !important;
-}
+}}
 [data-baseweb="select"] *,
-[data-baseweb="input"] * {
+[data-baseweb="input"] * {{
   color: var(--vm-ink) !important;
-}
-[data-testid="stExpander"] {
+}}
+[data-testid="stExpander"] {{
   background: #ffffff !important;
   border: 1px solid var(--vm-border) !important;
   border-radius: 14px !important;
-}
+}}
 [data-testid="stExpander"] summary,
 [data-testid="stExpander"] summary p,
-[data-testid="stExpander"] summary span {
+[data-testid="stExpander"] summary span {{
   color: var(--vm-ink) !important;
   font-weight: 850 !important;
-}
-/* Native Streamlit dataframes can inherit a dark table palette. Keep them
-   readable if an observation table is expanded. */
-[data-testid="stDataFrame"] {
+}}
+[data-testid="stDataFrame"] {{
   border: 1px solid var(--vm-border) !important;
   border-radius: 12px !important;
   overflow: hidden !important;
   background: #ffffff !important;
-}
-[data-testid="stDataFrame"] iframe {
+}}
+[data-testid="stDataFrame"] iframe {{
   background: #ffffff !important;
-}
-.stPlotlyChart {
+}}
+.stPlotlyChart {{
   border: 1px solid var(--vm-border);
   border-radius: 14px;
   overflow: hidden;
   background: #ffffff;
-}
+}}
 
 </style>
 """,
