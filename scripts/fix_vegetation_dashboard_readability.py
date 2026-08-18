@@ -84,3 +84,5 @@ html, body,
 
 if __name__ == "__main__":
     main()
+
+# UI redeploy marker: keep this file change-only; analytical pipeline untouched.
