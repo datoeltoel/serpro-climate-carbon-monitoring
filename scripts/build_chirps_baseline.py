@@ -7,7 +7,8 @@ Outputs:
 
 The monthly series is spatially averaged over the official SERPRO Carbon Project
 Zone and Project Area. Monthly rainfall is the sum of daily CHIRPS precipitation
-(mm/day), then spatially averaged over each scope.
+(mm/day), then spatially averaged over each scope. Observation exports also carry
+representative centroid longitude/latitude for the selected scope.
 """
 from __future__ import annotations
 
@@ -104,6 +105,11 @@ def build_monthly_features(scopes: dict[str, ee.Geometry]) -> ee.FeatureCollecti
     month_count = 45 * 12
     month_indices = ee.List.sequence(0, month_count - 1)
 
+    centroids = {
+        name: geometry.centroid(maxError=100).coordinates()
+        for name, geometry in scopes.items()
+    }
+
     def make_month(index):
         index = ee.Number(index)
         start = ee.Date(START).advance(index, "month")
@@ -125,11 +131,16 @@ def build_monthly_features(scopes: dict[str, ee.Geometry]) -> ee.FeatureCollecti
             bestEffort=True,
         ).get(BAND)
 
+        zone_centroid = centroids["carbon_project_zone"]
+        project_centroid = centroids["project_area"]
+
         return ee.FeatureCollection([
             ee.Feature(None, {
                 "year": start.get("year"),
                 "month": start.get("month"),
                 "scope": "carbon_project_zone",
+                "longitude": zone_centroid.get(0),
+                "latitude": zone_centroid.get(1),
                 "rainfall_mm": zone_value,
                 "source": COLLECTION,
             }),
@@ -137,6 +148,8 @@ def build_monthly_features(scopes: dict[str, ee.Geometry]) -> ee.FeatureCollecti
                 "year": start.get("year"),
                 "month": start.get("month"),
                 "scope": "project_area",
+                "longitude": project_centroid.get(0),
+                "latitude": project_centroid.get(1),
                 "rainfall_mm": project_value,
                 "source": COLLECTION,
             }),
@@ -162,6 +175,8 @@ def main() -> None:
             "year": int(props["year"]),
             "month": int(props["month"]),
             "scope": props["scope"],
+            "longitude": float(props["longitude"]),
+            "latitude": float(props["latitude"]),
             "rainfall_mm": float(value),
             "source": props["source"],
         })
@@ -175,7 +190,7 @@ def main() -> None:
         print(f"Warning: expected up to {expected} rows, received {len(df)}.")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_csv(MONTHLY_OUTPUT, index=False, float_format="%.4f")
+    df.to_csv(MONTHLY_OUTPUT, index=False, float_format="%.6f")
 
     normal = df[df["year"].between(NORMAL_START, NORMAL_END)].copy()
     climatology = (
@@ -197,13 +212,25 @@ def main() -> None:
     metadata = {
         "source": COLLECTION,
         "historical_period": "1981-2025",
+        "historical_download_period": "1996-2025",
         "climatology_period": f"{NORMAL_START}-{NORMAL_END}",
         "spatial_resolution_m": SCALE,
         "cadence": "daily",
+        "aggregation": "monthly sum of daily precipitation, then spatial mean over scope",
+        "coordinate_reference_system": "EPSG:4326",
+        "coordinate_definition": "representative centroid longitude/latitude of each SERPRO monitoring scope",
         "scope": ["carbon_project_zone", "project_area"],
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "monthly_records": int(len(df)),
         "climatology_records": int(len(climatology)),
+    }
+    metadata["scope_coordinates"] = {
+        scope: {
+            "longitude": float(df.loc[df["scope"] == scope, "longitude"].iloc[0]),
+            "latitude": float(df.loc[df["scope"] == scope, "latitude"].iloc[0]),
+        }
+        for scope in metadata["scope"]
+        if not df.loc[df["scope"] == scope].empty
     }
     METADATA_OUTPUT.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
