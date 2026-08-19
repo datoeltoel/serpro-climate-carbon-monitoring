@@ -1,0 +1,85 @@
+name: Validate Phase 2 Enterprise UI
+
+on:
+  push:
+    branches:
+      - refactor/phase-1-2-enterprise-ui
+  workflow_dispatch:
+
+jobs:
+  validate-phase-2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install streamlit folium streamlit-folium
+
+      - name: Validate Python syntax
+        run: |
+          python -m compileall -q app.py pages utils
+
+      - name: Validate Phase 2 architecture
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          ui = (root / 'utils' / 'enterprise_ui.py').read_text(encoding='utf-8')
+          config = (root / '.streamlit' / 'config.toml').read_text(encoding='utf-8')
+
+          required_pages = [
+              'pages/1_Executive_Summary.py',
+              'pages/2_MRV_Carbon_Tracker.py',
+              'pages/3_Climate_Monitoring.py',
+              'pages/4_Spatial_Data_Catalog.py',
+          ]
+          missing = [p for p in required_pages if not (root / p).exists()]
+          if missing:
+              raise SystemExit(f'Missing enterprise pages: {missing}')
+
+          required_ui_tokens = [
+              'st.columns([3, 2]',
+              'st.tabs(',
+              'YlGn',
+              'YlOrRd',
+              'st_folium(',
+          ]
+          missing_ui = [token for token in required_ui_tokens if token not in ui]
+          if missing_ui:
+              raise SystemExit(f'Missing Phase 2 UI requirements: {missing_ui}')
+
+          if 'base = "dark"' not in config:
+              raise SystemExit('Dark theme configuration is missing')
+
+          print('Phase 2 enterprise UI validation: PASS')
+          print('Fixed split view: 60/40')
+          print('Analysis tabs: enabled')
+          print('Cartographic ramps: YlGn / YlOrRd')
+          print('Dark clean theme: enabled')
+          PY
+
+      - name: Validate Streamlit page registration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('app.py').read_text(encoding='utf-8')
+          for token in [
+              'pages/1_Executive_Summary.py',
+              'pages/2_MRV_Carbon_Tracker.py',
+              'pages/3_Climate_Monitoring.py',
+              'pages/4_Spatial_Data_Catalog.py',
+              'st.navigation(',
+          ]:
+              if token not in text:
+                  raise SystemExit(f'Missing navigation registration: {token}')
+          print('Streamlit enterprise navigation validation: PASS')
+          PY
