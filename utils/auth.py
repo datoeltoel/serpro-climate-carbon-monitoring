@@ -16,9 +16,18 @@ ROLES = {
     "mrv_specialist": "MRV Specialist",
 }
 
+# Management is intentionally full-access: it can see every operational
+# module currently exposed by the application navigation.
+ALL_PAGE_KEYS = {
+    "climate_monitoring",
+    "vegetation_monitoring",
+    "fire_monitoring",
+    "climate_risk",
+}
+
 ROLE_PERMISSIONS = {
     "guest": {"climate_monitoring"},
-    "management": {"climate_monitoring"},
+    "management": set(ALL_PAGE_KEYS),
     "gis_specialist": {"climate_monitoring", "vegetation_monitoring", "fire_monitoring", "climate_risk"},
     "forestry_planner": {"climate_monitoring", "vegetation_monitoring", "fire_monitoring", "climate_risk"},
     "mrv_specialist": {"climate_monitoring", "vegetation_monitoring", "fire_monitoring", "climate_risk"},
