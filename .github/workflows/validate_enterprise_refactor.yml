@@ -11,6 +11,7 @@ on:
       - 'utils/enterprise_ui.py'
       - 'requirements.txt'
       - '.streamlit/config.toml'
+      - '.github/workflows/validate_enterprise_refactor.yml'
   pull_request:
     branches:
       - main
@@ -21,6 +22,7 @@ on:
       - 'utils/enterprise_ui.py'
       - 'requirements.txt'
       - '.streamlit/config.toml'
+      - '.github/workflows/validate_enterprise_refactor.yml'
 
 jobs:
   validate:
