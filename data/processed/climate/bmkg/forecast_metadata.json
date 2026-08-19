@@ -10,12 +10,15 @@
     "Halimaung Jaya",
     "Sungai Bakau"
   ],
-  "forecast_timestamp_used_for_idw": "2026-08-21T22:00:00",
+  "forecast_timestamp_used_for_idw": "2026-08-21T23:00:00",
   "idw_power": 2.0,
   "idw_resolution_m": 1000,
-  "project_zone": "SERPRO Carbon Project Zone",
-  "interpretation": "Forecast conditions interpolated from five BMKG ADM4 pilot villages using IDW. Not direct station observations and excluded from historical Climate Risk calculations.",
-  "fetched_at_utc": "2026-08-19T03:46:55.624105+00:00",
+  "boundaries": {
+    "project_zone": "SERPRO Carbon Project Zone",
+    "project_area": "SERPRO Project Area"
+  },
+  "interpretation": "Forecast conditions from five BMKG ADM4 pilot villages are spatially interpolated with IDW and clipped separately to the SERPRO Project Area and Carbon Project Zone. These are forecast surfaces, not direct station observations, and are excluded from historical Climate Risk calculations.",
+  "fetched_at_utc": "2026-08-19T04:50:04.686550+00:00",
   "quality": [
     {
       "location": "Pematang Limau",
@@ -52,5 +55,10 @@
       "records": 21,
       "error": ""
     }
-  ]
+  ],
+  "outputs": {
+    "project_zone": "data/processed/climate/bmkg/forecast_surface_project_zone_latest.geojson",
+    "project_area": "data/processed/climate/bmkg/forecast_surface_project_area_latest.geojson",
+    "legacy_project_zone": "data/processed/climate/bmkg/forecast_surface_latest.geojson"
+  }
 }

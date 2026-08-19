@@ -1,6 +1,6 @@
 {
 "type": "FeatureCollection",
-"name": "forecast_surface_latest",
+"name": "forecast_surface_project_zone_latest",
 "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
 "features": [
 { "type": "Feature", "properties": { "precipitation_mm": 0.0, "temperature_c": 25.365151930434887, "humidity_pct": 86.837618088632908, "cloud_cover_pct": 50.057105694583335, "wind_speed_ms": 12.082037916256155, "forecast_datetime": "2026-08-21T23:00:00", "source": "BMKG ADM4 forecast points + IDW", "boundary": "SERPRO Carbon Project Zone", "interpretation": "Forecast surface clipped to project boundary; not direct station observation" }, "geometry": { "type": "Point", "coordinates": [ 112.284461764970601, -3.176573290485695 ] } },
