@@ -1,1 +1,1 @@
-# RECOVERY: original content must be restored from pre-change commit
+# STOP
