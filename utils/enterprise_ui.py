@@ -5,6 +5,14 @@ import folium
 import streamlit as st
 from streamlit_folium import st_folium
 
+# Canonical cartographic ramps for Phase 2/3 domain layers.
+COLOR_RAMPS = {
+    "carbon_stock": "YlGn",
+    "ndvi": "YlGn",
+    "emissions": "YlOrRd",
+    "hotspot": "YlOrRd",
+}
+
 
 def apply_enterprise_css() -> None:
     st.markdown(
@@ -101,5 +109,7 @@ def render_split_map_analysis(
             st.metric("Latest processing", "—")
         with tab_metadata:
             st.write("Coordinate reference system: EPSG:4326")
+            st.write("Carbon/NDVI cartography: YlGn")
+            st.write("Emission/hotspot cartography: YlOrRd")
             st.write("Map interaction: prepared for Phase 3 bidirectional selection.")
         st.markdown('</div>', unsafe_allow_html=True)
