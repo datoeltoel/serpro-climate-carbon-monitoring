@@ -25,12 +25,15 @@ ALL_PAGE_KEYS = {
     "climate_risk",
 }
 
+# Guest is a field-operational viewer. It can read the climate, vegetation,
+# fire, and climate-risk monitoring pages, but receives no write/admin
+# privileges because those are not represented by these page permissions.
 ROLE_PERMISSIONS = {
-    "guest": {"climate_monitoring"},
+    "guest": set(ALL_PAGE_KEYS),
     "management": set(ALL_PAGE_KEYS),
-    "gis_specialist": {"climate_monitoring", "vegetation_monitoring", "fire_monitoring", "climate_risk"},
-    "forestry_planner": {"climate_monitoring", "vegetation_monitoring", "fire_monitoring", "climate_risk"},
-    "mrv_specialist": {"climate_monitoring", "vegetation_monitoring", "fire_monitoring", "climate_risk"},
+    "gis_specialist": set(ALL_PAGE_KEYS),
+    "forestry_planner": set(ALL_PAGE_KEYS),
+    "mrv_specialist": set(ALL_PAGE_KEYS),
 }
 
 # Backward-compatible aliases for the shorter usernames previously used in
