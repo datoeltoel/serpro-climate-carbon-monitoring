@@ -12,6 +12,7 @@ import streamlit as st
 import streamlit_authenticator as stauth
 
 ROLES = {
+    "guest": "Guest",
     "management": "Management",
     "gis_specialist": "GIS Specialist",
     "forestry_planner": "Forestry Planner",
@@ -19,6 +20,9 @@ ROLES = {
 }
 
 ROLE_PERMISSIONS = {
+    # Guest is intentionally read-only: public-facing summary and climate
+    # monitoring only. Detailed MRV and spatial catalog remain restricted.
+    "guest": {"executive_summary", "climate_monitoring"},
     "management": {"executive_summary", "climate_monitoring"},
     "gis_specialist": {
         "executive_summary",
@@ -57,9 +61,6 @@ def _secrets_config() -> dict[str, Any]:
     if not isinstance(cookie, dict):
         raise RuntimeError("Authentication configuration is missing [auth.cookie].")
 
-    # streamlit-authenticator 0.4.x expects credentials in a `usernames`
-    # mapping. The previous prototype example used one section per role,
-    # which looked plausible in TOML but did not match the library contract.
     usernames = credentials.get("usernames")
     if not isinstance(usernames, dict) or not usernames:
         raise RuntimeError(
@@ -122,7 +123,6 @@ def _restore_cookie(authenticator: stauth.Authenticate) -> None:
     try:
         authenticator.login(location="unrendered")
     except Exception:
-        # The visible login form below remains the source of truth.
         pass
 
 
