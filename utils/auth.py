@@ -12,6 +12,7 @@ import streamlit as st
 import streamlit_authenticator as stauth
 
 ROLES = {
+    "guest": "Guest",
     "management": "Management",
     "gis_specialist": "GIS Specialist",
     "forestry_planner": "Forestry Planner",
@@ -19,20 +20,74 @@ ROLES = {
 }
 
 ROLE_PERMISSIONS = {
+    "guest": {"executive_summary", "climate_monitoring"},
     "management": {"executive_summary", "climate_monitoring"},
-    "gis_specialist": {"executive_summary", "mrv_carbon_tracker", "climate_monitoring", "spatial_data_catalog"},
-    "forestry_planner": {"executive_summary", "mrv_carbon_tracker", "climate_monitoring"},
-    "mrv_specialist": {"executive_summary", "mrv_carbon_tracker", "climate_monitoring", "spatial_data_catalog"},
+    "gis_specialist": {
+        "executive_summary", "mrv_carbon_tracker", "climate_monitoring",
+        "spatial_data_catalog",
+    },
+    "forestry_planner": {
+        "executive_summary", "mrv_carbon_tracker", "climate_monitoring",
+    },
+    "mrv_specialist": {
+        "executive_summary", "mrv_carbon_tracker", "climate_monitoring",
+        "spatial_data_catalog",
+    },
 }
 
 
 def _secrets_config() -> dict[str, Any]:
+    """Read and validate username/password RBAC configuration."""
     if "auth" not in st.secrets:
         raise RuntimeError(
             "Authentication is not configured. Add the [auth] section to "
             "Streamlit Cloud Secrets before deploying the enterprise app."
         )
-    return deepcopy(dict(st.secrets["auth"]))
+
+    config = deepcopy(dict(st.secrets["auth"]))
+    credentials = config.get("credentials")
+    cookie = config.get("cookie")
+
+    if not isinstance(credentials, dict):
+        raise RuntimeError("Authentication configuration is missing [auth.credentials].")
+    if not isinstance(cookie, dict):
+        raise RuntimeError("Authentication configuration is missing [auth.cookie].")
+
+    usernames = credentials.get("usernames")
+    if not isinstance(usernames, dict) or not usernames:
+        raise RuntimeError(
+            "Invalid RBAC Secrets: use [auth.credentials.usernames.<username>] "
+            "for each account. See .streamlit/secrets.toml.example."
+        )
+
+    for username, user in usernames.items():
+        if not isinstance(user, dict):
+            raise RuntimeError(f"Invalid RBAC user entry: {username!r}.")
+        for field in ("name", "password"):
+            if not user.get(field):
+                raise RuntimeError(
+                    f"Invalid RBAC user {username!r}: missing {field!r}."
+                )
+        roles = user.get("roles", [])
+        if isinstance(roles, str):
+            roles = [roles]
+        if not roles:
+            raise RuntimeError(f"Invalid RBAC user {username!r}: at least one role is required.")
+        unknown = sorted(set(str(role).lower() for role in roles) - set(ROLES))
+        if unknown:
+            raise RuntimeError(
+                f"Invalid RBAC user {username!r}: unknown role(s): {', '.join(unknown)}."
+            )
+
+    required_cookie = {"name", "key"}
+    missing_cookie = sorted(required_cookie.difference(cookie))
+    if missing_cookie:
+        raise RuntimeError(
+            "Invalid RBAC Secrets: missing auth.cookie field(s): "
+            + ", ".join(missing_cookie)
+        )
+
+    return config
 
 
 def get_authenticator() -> stauth.Authenticate:
@@ -49,37 +104,35 @@ def get_authenticator() -> stauth.Authenticate:
         cookie_name=str(cookie["name"]),
         cookie_key=str(cookie["key"]),
         cookie_expiry_days=float(cookie.get("expiry_days", 30)),
-        auto_hash=False,
+        auto_hash=True,
     )
     st.session_state.serpro_authenticator = authenticator
     return authenticator
 
 
 def _restore_cookie(authenticator: stauth.Authenticate) -> None:
-    """Attempt silent cookie restoration on a hard refresh."""
     try:
         authenticator.login(location="unrendered")
     except Exception:
-        # The visible login form below remains the source of truth.
         pass
 
 
 def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
-    """Render login when needed and return authenticated user context."""
+    """Render username/password login and return authenticated user context."""
     authenticator = get_authenticator()
     _restore_cookie(authenticator)
 
     authenticated = st.session_state.get("authentication_status")
     if authenticated is not True:
         st.markdown("## 🔐 SERPRO MRV Carbon Monitoring")
-        st.caption("Enterprise access control")
+        st.caption("Username & password access")
         authenticator.login(location="main", key="serpro-login")
         authenticated = st.session_state.get("authentication_status")
 
         if authenticated is False:
             st.error("Username atau password tidak valid.")
         elif authenticated is None:
-            st.info("Silakan login untuk melanjutkan.")
+            st.info("Silakan masukkan username dan password untuk melanjutkan.")
         st.stop()
 
     username = str(st.session_state.get("username", ""))
