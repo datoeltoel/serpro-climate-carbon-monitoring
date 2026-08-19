@@ -79,7 +79,6 @@ html, body,
     else:
         text = text[:style_end] + css + text[style_end:]
 
-    # Replace the interpretation area with one clear vegetation-stress card.
     start_marker = "with interpretation_col:\n"
     end_marker = "\nst.markdown('<div class=\"vm-section-title\">📋 Monitoring details</div>'"
     start = text.find(start_marker)
@@ -100,7 +99,6 @@ html, body,
 '''
     text = text[:start] + stress_block + text[end:]
 
-    # Replace the observation expander with visible tables and Excel/CSV downloads.
     obs_start_marker = 'with st.expander("🗃️ Observation data", expanded=False):\n'
     obs_end_marker = '\nif spatial.get("features"):\n'
     obs_start = text.find(obs_start_marker)
@@ -160,4 +158,3 @@ if __name__ == "__main__":
     main()
 
 # UI-only patch marker: analytical vegetation pipeline remains untouched.
-'''
