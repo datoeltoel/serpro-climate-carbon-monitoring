@@ -4,7 +4,10 @@ on:
   push:
     paths:
       - 'utils/climate/bmkg.py'
+      - 'utils/climate/bmkg_idw.py'
       - 'scripts/integrate_bmkg_climate.py'
+      - 'scripts/validate_bmkg_idw.py'
+      - 'data/static/boundaries/serpro_carbon_project_zone_web.geojson'
   workflow_dispatch:
 
 permissions:
@@ -20,6 +23,8 @@ jobs:
           python-version: '3.11'
       - name: Apply integration
         run: python scripts/integrate_bmkg_climate.py
+      - name: Validate BMKG five-village IDW surface
+        run: python scripts/validate_bmkg_idw.py
       - name: Validate syntax
         run: python -m compileall -q pages utils scripts
       - name: Commit dashboard integration
