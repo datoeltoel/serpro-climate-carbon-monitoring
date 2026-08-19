@@ -3,10 +3,17 @@ from __future__ import annotations
 import pandas as pd
 
 from utils.climate.bmkg import BMKG_LOCATIONS, load_bmkg_forecast
-from utils.climate.bmkg_idw import interpolate_forecast_to_project_zone
-
+from utils.climate.bmkg_idw import (
+    PROJECT_AREA_PATH,
+    PROJECT_ZONE_PATH,
+    interpolate_forecast_to_project_zone,
+)
 
 EXPECTED = set(BMKG_LOCATIONS)
+BOUNDARIES = {
+    "Project Zone": PROJECT_ZONE_PATH,
+    "Project Area": PROJECT_AREA_PATH,
+}
 
 
 def main() -> None:
@@ -32,21 +39,25 @@ def main() -> None:
         raise SystemExit("BMKG validation failed: no common forecast timestamp across five villages")
 
     when = sorted(common_times)[0]
-    surface = interpolate_forecast_to_project_zone(
-        forecast,
-        value_column="precipitation_mm",
-        when=when,
-        resolution_m=1000,
-        power=2.0,
-    )
-    if surface.empty or surface["precipitation_mm"].dropna().empty:
-        raise SystemExit("IDW validation failed: no interpolated Project Zone values")
+    for boundary_label, boundary_path in BOUNDARIES.items():
+        surface = interpolate_forecast_to_project_zone(
+            forecast,
+            value_column="precipitation_mm",
+            when=when,
+            resolution_m=1000,
+            power=2.0,
+            boundary_path=boundary_path,
+            boundary_label=boundary_label,
+        )
+        if surface.empty or surface["precipitation_mm"].dropna().empty:
+            raise SystemExit(f"IDW validation failed: no interpolated values inside {boundary_label}")
+        if set(surface["boundary"].dropna().unique()) != {boundary_label}:
+            raise SystemExit(f"IDW validation failed: boundary label mismatch for {boundary_label}")
+        print(f"{boundary_label}: {len(surface)} clipped grid cells")
 
-    print("BMKG + IDW validation passed")
+    print("BMKG + IDW boundary clipping validation passed")
     print(f"Locations: {len(observed)}/5")
     print(f"Common forecast time: {when}")
-    print(f"Grid cells: {len(surface)}")
-    print(f"Variable: precipitation_mm")
     print(f"Quality records:\n{quality.to_string(index=False)}")
 
 
