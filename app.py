@@ -30,8 +30,8 @@ with st.sidebar:
     st.markdown("#### Data Sources")
     st.caption("GPM IMERG · CHIRPS · VIIRS S-NPP / NOAA-20 · Sentinel-2 · MODIS · BMKG Open Data")
 
-# F1-01: one deterministic navigation registry. Existing analytical modules
-# remain registered and are not deleted/recalculated during this refactor.
+# Single deterministic navigation registry. Existing analytical modules remain
+# registered and are not recalculated or replaced by the enterprise shell.
 enterprise_pages = {
     "EXECUTIVE SUMMARY": [
         ("executive_summary", st.Page("pages/1_Executive_Summary.py", title="Executive Summary", icon="📊", url_path="executive_summary", default=True)),
@@ -61,11 +61,8 @@ operational_pages = {
     ],
 }
 
-# F1-01 Guest operational viewer contract:
-# Guest must always be able to open the four field-operational monitoring
-# domains, while remaining read-only because page navigation itself grants no
-# write/admin capability. Keep this explicit at the navigation layer so a
-# stale/incomplete permission matrix cannot silently hide operational pages.
+# Guest remains a read-only field-operational viewer for the four monitoring
+# domains. MRV and spatial enterprise workspaces are intentionally restricted.
 GUEST_OPERATIONAL_VIEWER = {
     "climate_monitoring",
     "vegetation_monitoring",
@@ -73,25 +70,15 @@ GUEST_OPERATIONAL_VIEWER = {
     "climate_risk",
 }
 
-enterprise_allowed = {
-    "executive_summary": bool(roles),
-    "mrv_carbon_tracker": has_permission("vegetation_monitoring", roles),
-    "climate_monitoring": has_permission("climate_monitoring", roles),
-    "spatial_data_catalog": has_permission("vegetation_monitoring", roles),
-}
-
 navigation = {}
 for section, entries in enterprise_pages.items():
-    allowed = [page for key, page in entries if enterprise_allowed[key]]
+    allowed = [page for key, page in entries if has_permission(key, roles)]
     if allowed:
         navigation[section] = allowed
 
 for section, entries in operational_pages.items():
     allowed = []
     for key, page in entries:
-        # Explicit guest viewer allowance is intentional and limited to the
-        # operational monitoring pages above. Other roles continue to use the
-        # central RBAC permission matrix.
         if "guest" in roles and key in GUEST_OPERATIONAL_VIEWER:
             allowed.append(page)
         elif has_permission(key, roles):
