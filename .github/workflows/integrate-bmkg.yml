@@ -1,14 +1,9 @@
 name: Apply BMKG Climate Integration
 
 on:
-  push:
-    paths:
-      - 'utils/climate/bmkg.py'
-      - 'utils/climate/bmkg_idw.py'
-      - 'scripts/integrate_bmkg_climate.py'
-      - 'scripts/validate_bmkg_idw.py'
-      - 'data/static/boundaries/serpro_carbon_project_zone_web.geojson'
   workflow_dispatch:
+  schedule:
+    - cron: '0 */3 * * *'
 
 permissions:
   contents: write
@@ -17,24 +12,37 @@ jobs:
   integrate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Apply integration
-        run: python scripts/integrate_bmkg_climate.py
-      - name: Validate BMKG five-village IDW surface
-        run: python scripts/validate_bmkg_idw.py
-      - name: Validate syntax
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate Python syntax
         run: python -m compileall -q pages utils scripts
-      - name: Commit dashboard integration
+
+      - name: Run BMKG ingestion
+        run: python scripts/update_bmkg_forecast.py
+
+      - name: Validate BMKG forecast output
+        run: python scripts/validate_bmkg_forecast.py
+
+      - name: Build BMKG spatial forecast surface
+        run: python scripts/build_bmkg_forecast_surface.py
+
+      - name: Commit BMKG forecast outputs
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add pages/1_🌧_Climate_Monitoring.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/derived/bmkg data/derived/climate
           if git diff --cached --quiet; then
-            echo 'No dashboard changes needed.'
+            echo "No BMKG forecast changes to commit."
           else
-            git commit -m 'feat: integrate BMKG local weather into climate dashboard'
+            git commit -m "chore: update BMKG forecast data"
             git push
           fi
