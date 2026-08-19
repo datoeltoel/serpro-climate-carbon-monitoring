@@ -26,20 +26,17 @@ jobs:
       - name: Validate Python syntax
         run: python -m compileall -q pages utils scripts
 
-      - name: Run BMKG ingestion
+      - name: Ingest BMKG forecast and build IDW surface
         run: python scripts/update_bmkg_forecast.py
 
-      - name: Validate BMKG forecast output
-        run: python scripts/validate_bmkg_forecast.py
-
-      - name: Build BMKG spatial forecast surface
-        run: python scripts/build_bmkg_forecast_surface.py
+      - name: Validate BMKG + IDW output
+        run: python scripts/validate_bmkg_idw.py
 
       - name: Commit BMKG forecast outputs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/derived/bmkg data/derived/climate
+          git add data/processed/climate/bmkg
           if git diff --cached --quiet; then
             echo "No BMKG forecast changes to commit."
           else
