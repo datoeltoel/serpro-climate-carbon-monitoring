@@ -1,7 +1,7 @@
 """Authentication and role-based access control for SERPRO MRV."""
 from __future__ import annotations
 
-from copy import deepcopy
+from collections.abc import Mapping
 from typing import Any
 
 import streamlit as st
@@ -24,17 +24,34 @@ ROLE_PERMISSIONS = {
 }
 
 
+def _plain(value: Any) -> Any:
+    """Convert Streamlit Secrets containers to ordinary Python values.
+
+    Do not use copy.deepcopy() on st.secrets: Streamlit's Secrets object
+    recursively proxies nested values and deepcopy can recurse indefinitely.
+    """
+    if isinstance(value, Mapping):
+        return {str(key): _plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    return value
+
+
 def _secrets_config() -> dict[str, Any]:
     if "auth" not in st.secrets:
         raise RuntimeError("Authentication is not configured. Add [auth] to Streamlit Secrets.")
-    config = deepcopy(dict(st.secrets["auth"]))
+
+    config = _plain(st.secrets["auth"])
     credentials = config.get("credentials")
     cookie = config.get("cookie")
+
     if not isinstance(credentials, dict) or not isinstance(cookie, dict):
         raise RuntimeError("Authentication requires [auth.credentials] and [auth.cookie].")
+
     usernames = credentials.get("usernames")
     if not isinstance(usernames, dict) or not usernames:
         raise RuntimeError("Use [auth.credentials.usernames.<username>] for each account.")
+
     for username, user in usernames.items():
         if not isinstance(user, dict) or not user.get("name") or not user.get("password"):
             raise RuntimeError(f"Invalid RBAC user entry: {username!r}.")
@@ -46,18 +63,20 @@ def _secrets_config() -> dict[str, Any]:
         unknown = sorted(set(str(r).lower() for r in roles) - set(ROLES))
         if unknown:
             raise RuntimeError(f"User {username!r} has unknown role(s): {', '.join(unknown)}.")
+
     for field in ("name", "key"):
         if not cookie.get(field):
             raise RuntimeError(f"Missing auth.cookie.{field} in Streamlit Secrets.")
+
     return config
 
 
 def get_authenticator() -> stauth.Authenticate:
     if "serpro_authenticator" not in st.session_state:
         config = _secrets_config()
-        cookie = dict(config["cookie"])
+        cookie = config["cookie"]
         st.session_state.serpro_authenticator = stauth.Authenticate(
-            credentials=dict(config["credentials"]),
+            credentials=config["credentials"],
             cookie_name=str(cookie["name"]),
             cookie_key=str(cookie["key"]),
             cookie_expiry_days=float(cookie.get("expiry_days", 30)),
@@ -72,6 +91,7 @@ def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
         authenticator.login(location="unrendered")
     except Exception:
         pass
+
     if st.session_state.get("authentication_status") is not True:
         st.markdown("## 🔐 SERPRO Climate & Carbon Monitoring")
         st.caption("Silakan masuk menggunakan username dan password.")
@@ -82,6 +102,7 @@ def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
         else:
             st.info("Masukkan username dan password untuk melanjutkan.")
         st.stop()
+
     username = str(st.session_state.get("username", ""))
     name = str(st.session_state.get("name", username))
     user = dict(authenticator.credentials.get("usernames", {}).get(username, {}))
