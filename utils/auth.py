@@ -20,19 +20,81 @@ ROLES = {
 
 ROLE_PERMISSIONS = {
     "management": {"executive_summary", "climate_monitoring"},
-    "gis_specialist": {"executive_summary", "mrv_carbon_tracker", "climate_monitoring", "spatial_data_catalog"},
-    "forestry_planner": {"executive_summary", "mrv_carbon_tracker", "climate_monitoring"},
-    "mrv_specialist": {"executive_summary", "mrv_carbon_tracker", "climate_monitoring", "spatial_data_catalog"},
+    "gis_specialist": {
+        "executive_summary",
+        "mrv_carbon_tracker",
+        "climate_monitoring",
+        "spatial_data_catalog",
+    },
+    "forestry_planner": {
+        "executive_summary",
+        "mrv_carbon_tracker",
+        "climate_monitoring",
+    },
+    "mrv_specialist": {
+        "executive_summary",
+        "mrv_carbon_tracker",
+        "climate_monitoring",
+        "spatial_data_catalog",
+    },
 }
 
 
 def _secrets_config() -> dict[str, Any]:
+    """Read and validate the enterprise authentication configuration."""
     if "auth" not in st.secrets:
         raise RuntimeError(
             "Authentication is not configured. Add the [auth] section to "
             "Streamlit Cloud Secrets before deploying the enterprise app."
         )
-    return deepcopy(dict(st.secrets["auth"]))
+
+    config = deepcopy(dict(st.secrets["auth"]))
+    credentials = config.get("credentials")
+    cookie = config.get("cookie")
+
+    if not isinstance(credentials, dict):
+        raise RuntimeError("Authentication configuration is missing [auth.credentials].")
+    if not isinstance(cookie, dict):
+        raise RuntimeError("Authentication configuration is missing [auth.cookie].")
+
+    # streamlit-authenticator 0.4.x expects credentials in a `usernames`
+    # mapping. The previous prototype example used one section per role,
+    # which looked plausible in TOML but did not match the library contract.
+    usernames = credentials.get("usernames")
+    if not isinstance(usernames, dict) or not usernames:
+        raise RuntimeError(
+            "Invalid RBAC Secrets: use [auth.credentials.usernames.<username>] "
+            "for each account. See .streamlit/secrets.toml.example."
+        )
+
+    required_cookie = {"name", "key"}
+    missing_cookie = sorted(required_cookie.difference(cookie))
+    if missing_cookie:
+        raise RuntimeError(
+            "Invalid RBAC Secrets: missing auth.cookie field(s): "
+            + ", ".join(missing_cookie)
+        )
+
+    for username, user in usernames.items():
+        if not isinstance(user, dict):
+            raise RuntimeError(f"Invalid RBAC user entry: {username!r}.")
+        for field in ("name", "email", "password"):
+            if not user.get(field):
+                raise RuntimeError(
+                    f"Invalid RBAC user {username!r}: missing {field!r}."
+                )
+        roles = user.get("roles", [])
+        if isinstance(roles, str):
+            roles = [roles]
+        if not roles:
+            raise RuntimeError(f"Invalid RBAC user {username!r}: at least one role is required.")
+        unknown = sorted(set(str(role).lower() for role in roles) - set(ROLES))
+        if unknown:
+            raise RuntimeError(
+                f"Invalid RBAC user {username!r}: unknown role(s): {', '.join(unknown)}."
+            )
+
+    return config
 
 
 def get_authenticator() -> stauth.Authenticate:
