@@ -20,32 +20,24 @@ ROLES = {
 }
 
 ROLE_PERMISSIONS = {
-    # Guest is intentionally read-only: public-facing summary and climate
-    # monitoring only. Detailed MRV and spatial catalog remain restricted.
     "guest": {"executive_summary", "climate_monitoring"},
     "management": {"executive_summary", "climate_monitoring"},
     "gis_specialist": {
-        "executive_summary",
-        "mrv_carbon_tracker",
-        "climate_monitoring",
+        "executive_summary", "mrv_carbon_tracker", "climate_monitoring",
         "spatial_data_catalog",
     },
     "forestry_planner": {
-        "executive_summary",
-        "mrv_carbon_tracker",
-        "climate_monitoring",
+        "executive_summary", "mrv_carbon_tracker", "climate_monitoring",
     },
     "mrv_specialist": {
-        "executive_summary",
-        "mrv_carbon_tracker",
-        "climate_monitoring",
+        "executive_summary", "mrv_carbon_tracker", "climate_monitoring",
         "spatial_data_catalog",
     },
 }
 
 
 def _secrets_config() -> dict[str, Any]:
-    """Read and validate the enterprise authentication configuration."""
+    """Read and validate username/password RBAC configuration."""
     if "auth" not in st.secrets:
         raise RuntimeError(
             "Authentication is not configured. Add the [auth] section to "
@@ -68,18 +60,10 @@ def _secrets_config() -> dict[str, Any]:
             "for each account. See .streamlit/secrets.toml.example."
         )
 
-    required_cookie = {"name", "key"}
-    missing_cookie = sorted(required_cookie.difference(cookie))
-    if missing_cookie:
-        raise RuntimeError(
-            "Invalid RBAC Secrets: missing auth.cookie field(s): "
-            + ", ".join(missing_cookie)
-        )
-
     for username, user in usernames.items():
         if not isinstance(user, dict):
             raise RuntimeError(f"Invalid RBAC user entry: {username!r}.")
-        for field in ("name", "email", "password"):
+        for field in ("name", "password"):
             if not user.get(field):
                 raise RuntimeError(
                     f"Invalid RBAC user {username!r}: missing {field!r}."
@@ -94,6 +78,14 @@ def _secrets_config() -> dict[str, Any]:
             raise RuntimeError(
                 f"Invalid RBAC user {username!r}: unknown role(s): {', '.join(unknown)}."
             )
+
+    required_cookie = {"name", "key"}
+    missing_cookie = sorted(required_cookie.difference(cookie))
+    if missing_cookie:
+        raise RuntimeError(
+            "Invalid RBAC Secrets: missing auth.cookie field(s): "
+            + ", ".join(missing_cookie)
+        )
 
     return config
 
@@ -112,14 +104,13 @@ def get_authenticator() -> stauth.Authenticate:
         cookie_name=str(cookie["name"]),
         cookie_key=str(cookie["key"]),
         cookie_expiry_days=float(cookie.get("expiry_days", 30)),
-        auto_hash=False,
+        auto_hash=True,
     )
     st.session_state.serpro_authenticator = authenticator
     return authenticator
 
 
 def _restore_cookie(authenticator: stauth.Authenticate) -> None:
-    """Attempt silent cookie restoration on a hard refresh."""
     try:
         authenticator.login(location="unrendered")
     except Exception:
@@ -127,21 +118,21 @@ def _restore_cookie(authenticator: stauth.Authenticate) -> None:
 
 
 def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
-    """Render login when needed and return authenticated user context."""
+    """Render username/password login and return authenticated user context."""
     authenticator = get_authenticator()
     _restore_cookie(authenticator)
 
     authenticated = st.session_state.get("authentication_status")
     if authenticated is not True:
         st.markdown("## 🔐 SERPRO MRV Carbon Monitoring")
-        st.caption("Enterprise access control")
+        st.caption("Username & password access")
         authenticator.login(location="main", key="serpro-login")
         authenticated = st.session_state.get("authentication_status")
 
         if authenticated is False:
             st.error("Username atau password tidak valid.")
         elif authenticated is None:
-            st.info("Silakan login untuk melanjutkan.")
+            st.info("Silakan masukkan username dan password untuk melanjutkan.")
         st.stop()
 
     username = str(st.session_state.get("username", ""))
