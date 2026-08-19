@@ -1,1 +1,1 @@
-# Temporary recovery pending source retrieval
+# Recovery placeholder
