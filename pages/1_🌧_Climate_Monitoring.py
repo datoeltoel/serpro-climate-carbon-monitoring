@@ -41,20 +41,38 @@ st.markdown(
     .section-title { color: var(--serpro-ink); font-size: 1.18rem; font-weight: 800; margin: 22px 0 8px; }
     .section-note { color: var(--serpro-muted); font-size: .78rem; margin: -3px 0 10px; }
     .kpi {
-        background: #FFFFFF;
         border: 1px solid var(--serpro-line);
         border-radius: 15px;
         padding: 15px 16px;
         min-height: 112px;
-        box-shadow: 0 2px 10px rgba(21,96,100,.05);
+        box-shadow: 0 2px 10px rgba(21,96,100,.06);
     }
+    .kpi-green { background: #E8FBF5; border-color: #BCEFE1; }
+    .kpi-deep { background: #EAF5F5; border-color: #C6E2E2; }
+    .kpi-yellow { background: #FFF9D9; border-color: #F3E7A1; }
+    .kpi-coral { background: #FFF0EC; border-color: #FFD1C7; }
     .kpi-label { color: var(--serpro-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
     .kpi-value { color: var(--serpro-ink); font-size: 1.65rem; font-weight: 850; line-height: 1.15; margin-top: 7px; }
     .kpi-note { color: var(--serpro-muted); font-size: .72rem; margin-top: 6px; }
-    .status-card { border-radius: 15px; padding: 17px 18px; border: 1px solid var(--serpro-line); background: #fff; min-height: 126px; }
+    .kpi-green .kpi-value { color: #087A65; }
+    .kpi-deep .kpi-value { color: var(--serpro-deep); }
+    .kpi-yellow .kpi-value { color: #8A6B00; }
+    .kpi-coral .kpi-value { color: #D94F35; }
+    .status-card { border-radius: 15px; padding: 17px 18px; border: 1px solid var(--serpro-line); min-height: 126px; }
+    .status-drought { background: #FFF0EC; border-color: #FFD1C7; }
+    .status-risk { background: #FFF3E8; border-color: #FFD2B8; }
+    .status-observation { background: #E8FBF5; border-color: #BCEFE1; }
     .status-label { color: var(--serpro-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
-    .status-value { color: var(--serpro-ink); font-size: 1.55rem; font-weight: 850; margin-top: 5px; }
+    .status-value { color: var(--serpro-ink); font-size: 1.55rem; font-weight: 850; margin-top: 5px; line-height: 1.15; }
+    .status-drought .status-value { color: #D94F35; font-size: 1.28rem; }
+    .status-risk .status-value { color: #D96822; font-size: 1.35rem; }
+    .status-observation .status-value { color: #087A65; font-size: 1.35rem; }
     .status-desc { color: var(--serpro-muted); font-size: .76rem; margin-top: 5px; }
+    .spi-card { border-radius: 15px; padding: 15px 16px; min-height: 100px; border: 1px solid var(--serpro-line); }
+    .spi-blue { background: #EAF5F5; border-color: #C6E2E2; }
+    .spi-yellow { background: #FFF9D9; border-color: #F3E7A1; }
+    .spi-label { color: var(--serpro-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+    .spi-value { color: var(--serpro-ink); font-size: 1.35rem; font-weight: 800; margin-top: 6px; line-height: 1.1; }
     .info-strip { background: #F5FAF9; border: 1px solid var(--serpro-line); border-radius: 14px; padding: 13px 16px; color: var(--serpro-muted); font-size: .78rem; }
     .legend-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
     .legend-item { display:flex; align-items:center; gap:6px; font-size:.74rem; color:var(--serpro-muted); }
@@ -156,13 +174,13 @@ source_label = {"NASA/GPM_L3/IMERG_V07": "NASA GPM IMERG V07"}.get(source, sourc
 st.markdown('<div class="section-title">Climate snapshot</div>', unsafe_allow_html=True)
 k1, k2, k3, k4 = st.columns(4)
 
-def kpi_html(label, value, note):
-    return f'<div class="kpi"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div><div class="kpi-note">{note}</div></div>'
+def kpi_html(label, value, note, variant):
+    return f'<div class="kpi {variant}"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div><div class="kpi-note">{note}</div></div>'
 
 with k1:
-    st.markdown(kpi_html("Latest rainfall", f"{latest_value:.2f} mm", f"Observation · {latest_date.date()}"), unsafe_allow_html=True)
+    st.markdown(kpi_html("Latest rainfall", f"{latest_value:.2f} mm", f"Observation · {latest_date.date()}", "kpi-green"), unsafe_allow_html=True)
 with k2:
-    st.markdown(kpi_html("Rainfall · 30 days", f"{selected_30d:.1f} mm", "Accumulated selected period"), unsafe_allow_html=True)
+    st.markdown(kpi_html("Rainfall · 30 days", f"{selected_30d:.1f} mm", "Accumulated selected period", "kpi-deep"), unsafe_allow_html=True)
 with k3:
     # latest anomaly within selected period
     anom_latest = None
@@ -172,7 +190,7 @@ with k3:
         if not an.empty and pd.notna(an.iloc[-1].get("anomaly_30d_pct")):
             anom_latest = float(an.iloc[-1]["anomaly_30d_pct"])
     anomaly_text = f"{anom_latest:+.1f}%" if anom_latest is not None else "—"
-    st.markdown(kpi_html("30-day anomaly", anomaly_text, "vs CHIRPS 1991–2020 normal"), unsafe_allow_html=True)
+    st.markdown(kpi_html("30-day anomaly", anomaly_text, "vs CHIRPS 1991–2020 normal", "kpi-coral"), unsafe_allow_html=True)
 with k4:
     # latest risk within selection
     risk_level = "—"
@@ -182,7 +200,7 @@ with k4:
         if not selected_risk.empty:
             risk_level = str(selected_risk.iloc[-1].get("risk_level", "—")).replace("_", " ").title()
     risk_dot = {"Low": "🟢", "Moderate": "🟡", "High": "🟠", "Very High": "🔴"}.get(risk_level, "⚪")
-    st.markdown(kpi_html("Climate risk", f"{risk_dot} {risk_level}", "Latest available assessment"), unsafe_allow_html=True)
+    st.markdown(kpi_html("Climate risk", f"{risk_dot} {risk_level}", "Latest available assessment", "kpi-yellow"), unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # Condition + risk overview
@@ -202,7 +220,7 @@ with cc1:
         status = str(a.get("climate_status", "Insufficient Data")).replace("_", " ").title()
         icon = {"Very Wet": "🟣", "Wet": "🔵", "Normal": "🟢", "Dry": "🟡", "Drought": "🔴", "Insufficient Data": "⚪"}.get(status, "⚪")
         desc = "Latest 30-day rainfall condition against the historical baseline."
-    st.markdown(f'<div class="status-card"><div class="status-label">Rainfall condition</div><div class="status-value">{icon} {status}</div><div class="status-desc">{desc}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="status-card status-drought"><div class="status-label">Rainfall condition</div><div class="status-value">{icon} {status}</div><div class="status-desc">{desc}</div></div>', unsafe_allow_html=True)
 
 with cc2:
     if selected_risk.empty:
@@ -212,7 +230,7 @@ with cc2:
         rlevel = str(rr.get("risk_level", "—")).replace("_", " ").title()
         ricon = {"Low": "🟢", "Moderate": "🟡", "High": "🟠", "Very High": "🔴"}.get(rlevel, "⚪")
         rdesc = f"Assessment date: {rr['date'].date()}."
-    st.markdown(f'<div class="status-card"><div class="status-label">Climate risk</div><div class="status-value">{ricon} {rlevel}</div><div class="status-desc">{rdesc}</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="status-card status-risk"><div class="status-label">Climate risk</div><div class="status-value">{ricon} {rlevel}</div><div class="status-desc">{rdesc}</div></div>', unsafe_allow_html=True)
 
 with cc3:
     if selected_anom.empty:
@@ -220,7 +238,7 @@ with cc3:
     else:
         obs = selected_anom.iloc[-1].get("obs_count_30d")
         obs_text = f"{int(obs)}/30 days" if pd.notna(obs) else "—"
-    st.markdown(f'<div class="status-card"><div class="status-label">30-day observations</div><div class="status-value">{obs_text}</div><div class="status-desc">Observation availability in the latest anomaly calculation.</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="status-card status-observation"><div class="status-label">30-day observations</div><div class="status-value">{obs_text}</div><div class="status-desc">Observation availability in the latest anomaly calculation.</div></div>', unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # Rainfall trend and anomaly
@@ -271,7 +289,14 @@ else:
             vals.extend([f"{float(s6.iloc[0]['spi']):+.2f}", str(s6.iloc[0]["spi_status"]).replace("_", " ").title()])
         else:
             vals.extend(["—", "Insufficient data"])
-        sp1.metric("SPI-3", vals[0]); sp2.metric("SPI-3 status", vals[1]); sp3.metric("SPI-6", vals[2]); sp4.metric("SPI-6 status", vals[3])
+        with sp1:
+            st.markdown(f'<div class="spi-card spi-blue"><div class="spi-label">SPI-3</div><div class="spi-value">{vals[0]}</div></div>', unsafe_allow_html=True)
+        with sp2:
+            st.markdown(f'<div class="spi-card spi-yellow"><div class="spi-label">SPI-3 status</div><div class="spi-value">{vals[1]}</div></div>', unsafe_allow_html=True)
+        with sp3:
+            st.markdown(f'<div class="spi-card spi-blue"><div class="spi-label">SPI-6</div><div class="spi-value">{vals[2]}</div></div>', unsafe_allow_html=True)
+        with sp4:
+            st.markdown(f'<div class="spi-card spi-yellow"><div class="spi-label">SPI-6 status</div><div class="spi-value">{vals[3]}</div></div>', unsafe_allow_html=True)
         st.caption(f"Latest SPI calculation: {latest_spi_date.date()} · Values below zero indicate drier-than-normal conditions; values above zero indicate wetter-than-normal conditions.")
 
 # -----------------------------------------------------------------------------
