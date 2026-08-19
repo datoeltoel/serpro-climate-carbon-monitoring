@@ -1,0 +1,63 @@
+name: Validate F1-01 Enterprise Navigation
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-f1-01:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compile Python files
+        run: python -m compileall -q app.py pages app_pages utils
+
+      - name: Validate deterministic enterprise navigation
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          app = Path('app.py').read_text(encoding='utf-8')
+          tree = ast.parse(app)
+
+          required = {
+              'pages/1_Executive_Summary.py',
+              'pages/2_MRV_Carbon_Tracker.py',
+              'pages/3_Climate_Monitoring.py',
+              'pages/4_Spatial_Data_Catalog.py',
+          }
+          for path in required:
+              assert Path(path).is_file(), f'Missing enterprise page: {path}'
+              ast.parse(Path(path).read_text(encoding='utf-8'))
+
+          navigation_calls = [
+              node for node in ast.walk(tree)
+              if isinstance(node, ast.Call)
+              and isinstance(node.func, ast.Attribute)
+              and isinstance(node.func.value, ast.Name)
+              and node.func.value.id == 'st'
+              and node.func.attr == 'navigation'
+          ]
+          assert len(navigation_calls) == 1, f'Expected exactly one st.navigation() call, found {len(navigation_calls)}'
+
+          for path in sorted(required):
+              assert path in app, f'{path} is not registered by app.py'
+
+          assert 'app_pages/historical_climate.py' in app
+          assert 'app_pages/bmkg_local_weather_forecast.py' in app
+          assert 'app_pages/vegetation_monitoring.py' in app
+          assert 'app_pages/fire_monitoring.py' in app
+          assert 'app_pages/climate_risk.py' in app
+
+          print('F1-01 PASS: four enterprise pages registered, exactly one st.navigation(), legacy analytical modules preserved.')
+          PY
