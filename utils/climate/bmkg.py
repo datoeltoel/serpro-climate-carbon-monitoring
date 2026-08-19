@@ -27,6 +27,10 @@ def _num(value: Any) -> float | None:
 
 def _parse_location(payload: dict, name: str, adm4: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    lokasi = payload.get("lokasi", {}) if isinstance(payload, dict) else {}
+    lat = _num(lokasi.get("lat"))
+    lon = _num(lokasi.get("lon"))
+
     # BMKG forecast responses have weather lists under data[].cuaca, usually nested by day.
     for block in payload.get("data", []) or []:
         cuaca = block.get("cuaca", []) if isinstance(block, dict) else []
@@ -43,6 +47,8 @@ def _parse_location(payload: dict, name: str, adm4: str) -> list[dict[str, Any]]
                 rows.append({
                     "location": name,
                     "adm4": adm4,
+                    "latitude": lat,
+                    "longitude": lon,
                     "datetime": item.get("datetime"),
                     "local_datetime": dt,
                     "temperature_c": _num(item.get("t")),
