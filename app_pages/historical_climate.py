@@ -1,3 +1,4 @@
+from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
@@ -74,35 +75,30 @@ if start_date > end_date:
 
 view = scoped_all[(scoped_all["date"].dt.date >= start_date) & (scoped_all["date"].dt.date <= end_date)].copy()
 
-# -----------------------------------------------------------------------------
-# Data Quality & Information
-# -----------------------------------------------------------------------------
-# Keep methodology and provenance visible on the dashboard so readers can
-# interpret the historical evidence without needing to inspect the repository.
 with st.expander("ℹ️ Data Quality & Information", expanded=True):
     st.markdown("### Data sources & processing")
     q1, q2, q3 = st.columns(3)
     with q1:
         st.markdown("**Historical rainfall**")
-        st.write("NASA GPM IMERG V07")
-        st.caption("Daily precipitation aggregated from 30-minute IMERG observations using zonal mean over the selected SERPRO boundary.")
+        st.write("CHIRPS v2 Final")
+        st.caption("Monthly rainfall derived from daily CHIRPS precipitation and spatially averaged over the selected SERPRO boundary.")
     with q2:
         st.markdown("**Rainfall anomaly baseline**")
         st.write("CHIRPS v2 Final · 1991–2020")
-        st.caption("Current rainfall is compared with the climatological mean for the same calendar month-day. 7-day and 30-day rolling anomalies are calculated.")
+        st.caption("Current rainfall is compared with the climatological mean for the corresponding baseline period.")
     with q3:
         st.markdown("**Drought / wetness indicator**")
         st.write("SPI-3 & SPI-6")
-        st.caption("Gamma-distribution fitting followed by normal-standard transformation, using CHIRPS historical rainfall distribution and current GPM rainfall.")
+        st.caption("Standardized wetness/dryness indicators based on the historical rainfall distribution.")
 
     st.markdown("### Methodology at a glance")
     st.markdown(
         """
-        1. **Rainfall:** daily rainfall is derived from NASA GPM IMERG V07 and summarized for the selected monitoring boundary.
-        2. **Rainfall anomaly:** the current 7-day and 30-day accumulated rainfall is compared with the corresponding CHIRPS 1991–2020 climatological baseline.
-        3. **Climate status:** the 30-day anomaly is classified as very wet, wet, normal, dry, or drought when a complete 30-day observation window is available.
-        4. **SPI:** SPI-3 and SPI-6 represent standardized wetness/dryness relative to the historical CHIRPS distribution. Values near zero are normal; negative values indicate drier conditions and positive values indicate wetter conditions.
-        5. **Climate risk:** the dashboard displays the downstream climate-risk output based on 30-day rainfall anomaly, SPI-3 and SPI-6. The current risk implementation is provisional and is separate from the BMKG operational forecast.
+        1. **Historical rainfall:** CHIRPS daily precipitation is summed to monthly rainfall and spatially averaged over each SERPRO scope.
+        2. **30-year historical window:** the dashboard uses the latest complete 30-year period available in the CHIRPS series, **1996–2025**.
+        3. **Rainfall anomaly:** the operational rainfall product is compared with the CHIRPS 1991–2020 climatological baseline.
+        4. **SPI:** SPI-3 and SPI-6 represent standardized wetness/dryness relative to the historical rainfall distribution.
+        5. **Coordinates:** downloaded historical observations include representative scope centroid longitude/latitude in **EPSG:4326**.
         """
     )
 
@@ -122,15 +118,10 @@ with st.expander("ℹ️ Data Quality & Information", expanded=True):
     qc4.metric("Latest processing", latest_processing)
 
     st.info(
-        "Interpretation note: historical climate products are analytical evidence and are not weather forecasts. "
-        "BMKG Local Weather Forecast is intentionally maintained on its own sub-page and is excluded from historical rainfall, anomaly, SPI and climate-risk calculations."
+        "Historical climate products are analytical evidence and are not weather forecasts. "
+        "BMKG Local Weather Forecast remains on its own sub-page and is excluded from historical rainfall, anomaly, SPI and climate-risk calculations."
     )
 
-# -----------------------------------------------------------------------------
-# Historical Climate sub-pages are represented as tabs inside this dedicated
-# Historical Climate page. BMKG forecast is intentionally absent from this
-# module and lives on its own Climate Monitoring page.
-# -----------------------------------------------------------------------------
 tab_snapshot, tab_rain, tab_anom, tab_spi, tab_trend = st.tabs(
     ["Climate Snapshot", "Historical Rainfall", "Rainfall Anomaly", "SPI-3 / SPI-6", "Climate Trend"]
 )
@@ -170,14 +161,93 @@ with tab_snapshot:
         )
 
 with tab_rain:
-    if view.empty:
-        st.info("Tidak ada data rainfall pada periode yang dipilih.")
+    historical_path = Path("data/processed/climate/rainfall/chirps_monthly_1981_2025.csv")
+    if not historical_path.exists():
+        st.warning("Data historical CHIRPS belum tersedia. Jalankan workflow Build CHIRPS Baseline terlebih dahulu.")
     else:
-        fig = go.Figure()
-        fig.add_bar(x=view["date"], y=view["rainfall_mm"], name="Rainfall")
-        fig.update_layout(height=430, margin=dict(l=10, r=10, t=20, b=10), yaxis_title="Rainfall (mm)", xaxis_title="Date")
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        st.dataframe(view, use_container_width=True, hide_index=True)
+        hist = pd.read_csv(historical_path)
+        hist["year"] = pd.to_numeric(hist["year"], errors="coerce")
+        hist["month"] = pd.to_numeric(hist["month"], errors="coerce")
+        hist["rainfall_mm"] = pd.to_numeric(hist["rainfall_mm"], errors="coerce")
+        hist = hist.dropna(subset=["year", "month", "rainfall_mm"])
+        hist = hist[(hist["year"] >= 1996) & (hist["year"] <= 2025)].copy()
+        hist = hist[hist["scope"].astype(str) == scope].sort_values(["year", "month"])
+
+        if hist.empty:
+            st.info("Tidak ada observasi CHIRPS 1996–2025 untuk scope yang dipilih.")
+        else:
+            hist["year"] = hist["year"].astype(int)
+            hist["month"] = hist["month"].astype(int)
+            if "longitude" not in hist.columns or "latitude" not in hist.columns:
+                st.warning("Kolom longitude/latitude belum tersedia pada dataset CHIRPS. Jalankan ulang workflow Build CHIRPS Baseline untuk memperbarui metadata koordinat.")
+                hist["longitude"] = pd.NA
+                hist["latitude"] = pd.NA
+
+            hist["date"] = pd.to_datetime(
+                hist["year"].astype(str) + "-" + hist["month"].astype(str).str.zfill(2) + "-01",
+                errors="coerce",
+            )
+
+            annual = hist.groupby("year", as_index=False)["rainfall_mm"].sum()
+            monthly = hist.groupby("month", as_index=False)["rainfall_mm"].mean()
+            s1, s2, s3, s4 = st.columns(4)
+            s1.metric("Period", "1996–2025")
+            s2.metric("Years", f"{hist['year'].nunique()}")
+            s3.metric("Observations", f"{len(hist):,}")
+            s4.metric("30-year mean", f"{hist['rainfall_mm'].mean():.1f} mm/month")
+
+            st.markdown("### Monthly historical rainfall")
+            fig = go.Figure()
+            fig.add_scatter(x=hist["date"], y=hist["rainfall_mm"], mode="lines", name="Monthly rainfall")
+            fig.update_layout(height=420, margin=dict(l=10, r=10, t=20, b=10), yaxis_title="Rainfall (mm/month)", xaxis_title="Year")
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+            st.markdown("### Annual rainfall · 1996–2025")
+            fig2 = go.Figure()
+            fig2.add_bar(x=annual["year"], y=annual["rainfall_mm"], name="Annual rainfall")
+            fig2.update_layout(height=360, margin=dict(l=10, r=10, t=20, b=10), yaxis_title="Rainfall (mm/year)", xaxis_title="Year")
+            st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
+
+            st.markdown("### Observation metadata & download")
+            st.caption("Each record contains the observation year/month, monitoring scope, representative centroid longitude/latitude (EPSG:4326), rainfall, and source dataset.")
+            export_cols = ["year", "month", "scope", "longitude", "latitude", "rainfall_mm", "source"]
+            export_df = hist[[c for c in export_cols if c in hist.columns]].copy()
+            st.dataframe(export_df, use_container_width=True, hide_index=True)
+
+            csv_bytes = export_df.to_csv(index=False).encode("utf-8")
+            excel_buffer = BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                export_df.to_excel(writer, index=False, sheet_name="Observation")
+            excel_bytes = excel_buffer.getvalue()
+
+            d1, d2 = st.columns(2)
+            with d1:
+                st.download_button(
+                    "⬇️ Download Observation CSV",
+                    data=csv_bytes,
+                    file_name=f"SERPRO_Historical_Rainfall_1996_2025_{scope}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            with d2:
+                st.download_button(
+                    "⬇️ Download Observation XLSX",
+                    data=excel_bytes,
+                    file_name=f"SERPRO_Historical_Rainfall_1996_2025_{scope}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
+
+            with st.expander("Metadata definition"):
+                st.markdown(
+                    """
+                    - **year / month** — observation period.
+                    - **scope** — `project_area` or `carbon_project_zone`.
+                    - **longitude / latitude** — representative centroid of the selected SERPRO scope, EPSG:4326.
+                    - **rainfall_mm** — monthly rainfall, calculated from the sum of daily CHIRPS precipitation and spatially averaged over the scope.
+                    - **source** — CHIRPS Earth Engine collection identifier.
+                    """
+                )
 
 with tab_anom:
     if anomaly.empty:
