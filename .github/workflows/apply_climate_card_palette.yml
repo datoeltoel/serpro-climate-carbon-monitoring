@@ -1,0 +1,75 @@
+name: Apply Climate Dashboard Card Palette
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply_climate_card_palette.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply palette to climate cards
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('pages/1_🌧_Climate_Monitoring.py')
+          text = p.read_text(encoding='utf-8')
+
+          old_css = '''    .kpi {\n        background: #FFFFFF;\n        border: 1px solid var(--serpro-line);\n        border-radius: 15px;\n        padding: 15px 16px;\n        min-height: 112px;\n        box-shadow: 0 2px 10px rgba(21,96,100,.05);\n    }\n    .kpi-label { color: var(--serpro-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }\n    .kpi-value { color: var(--serpro-ink); font-size: 1.65rem; font-weight: 850; line-height: 1.15; margin-top: 7px; }\n    .kpi-note { color: var(--serpro-muted); font-size: .72rem; margin-top: 6px; }\n    .status-card { border-radius: 15px; padding: 17px 18px; border: 1px solid var(--serpro-line); background: #fff; min-height: 126px; }\n    .status-label { color: var(--serpro-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }\n    .status-value { color: var(--serpro-ink); font-size: 1.55rem; font-weight: 850; margin-top: 5px; }\n    .status-desc { color: var(--serpro-muted); font-size: .76rem; margin-top: 5px; }'''
+          new_css = '''    .kpi {\n        border: 1px solid var(--serpro-line);\n        border-radius: 15px;\n        padding: 15px 16px;\n        min-height: 112px;\n        box-shadow: 0 2px 10px rgba(21,96,100,.06);\n    }\n    .kpi-green { background: #E8FBF5; border-color: #BCEFE1; }\n    .kpi-deep { background: #EAF5F5; border-color: #C6E2E2; }\n    .kpi-yellow { background: #FFF9D9; border-color: #F3E7A1; }\n    .kpi-coral { background: #FFF0EC; border-color: #FFD1C7; }\n    .kpi-label { color: var(--serpro-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }\n    .kpi-value { color: var(--serpro-ink); font-size: 1.65rem; font-weight: 850; line-height: 1.15; margin-top: 7px; }\n    .kpi-note { color: var(--serpro-muted); font-size: .72rem; margin-top: 6px; }\n    .kpi-green .kpi-value { color: #087A65; }\n    .kpi-deep .kpi-value { color: var(--serpro-deep); }\n    .kpi-yellow .kpi-value { color: #8A6B00; }\n    .kpi-coral .kpi-value { color: #D94F35; }\n    .status-card { border-radius: 15px; padding: 17px 18px; border: 1px solid var(--serpro-line); min-height: 126px; }\n    .status-drought { background: #FFF0EC; border-color: #FFD1C7; }\n    .status-risk { background: #FFF3E8; border-color: #FFD2B8; }\n    .status-observation { background: #E8FBF5; border-color: #BCEFE1; }\n    .status-label { color: var(--serpro-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }\n    .status-value { color: var(--serpro-ink); font-size: 1.55rem; font-weight: 850; margin-top: 5px; line-height: 1.15; }\n    .status-drought .status-value { color: #D94F35; font-size: 1.28rem; }\n    .status-risk .status-value { color: #D96822; font-size: 1.35rem; }\n    .status-observation .status-value { color: #087A65; font-size: 1.35rem; }\n    .status-desc { color: var(--serpro-muted); font-size: .76rem; margin-top: 5px; }\n    .spi-card { border-radius: 15px; padding: 15px 16px; min-height: 100px; border: 1px solid var(--serpro-line); }\n    .spi-blue { background: #EAF5F5; border-color: #C6E2E2; }\n    .spi-yellow { background: #FFF9D9; border-color: #F3E7A1; }\n    .spi-label { color: var(--serpro-muted); font-size: .72rem; font-weight: 800; text-transform: uppercase; }\n    .spi-value { color: var(--serpro-ink); font-size: 1.35rem; font-weight: 800; margin-top: 6px; line-height: 1.1; }'''
+          if old_css not in text:
+              raise SystemExit('Expected climate card CSS block not found')
+          text = text.replace(old_css, new_css, 1)
+
+          old_fn = '''def kpi_html(label, value, note):\n    return f'<div class="kpi"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div><div class="kpi-note">{note}</div></div>'\n'''
+          new_fn = '''def kpi_html(label, value, note, variant):\n    return f'<div class="kpi {variant}"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div><div class="kpi-note">{note}</div></div>'\n'''
+          if old_fn not in text:
+              raise SystemExit('Expected kpi_html function not found')
+          text = text.replace(old_fn, new_fn, 1)
+
+          replacements = [
+            ('kpi_html("Latest rainfall", f"{latest_value:.2f} mm", f"Observation · {latest_date.date()}")', 'kpi_html("Latest rainfall", f"{latest_value:.2f} mm", f"Observation · {latest_date.date()}", "kpi-green")'),
+            ('kpi_html("Rainfall · 30 days", f"{selected_30d:.1f} mm", "Accumulated selected period")', 'kpi_html("Rainfall · 30 days", f"{selected_30d:.1f} mm", "Accumulated selected period", "kpi-deep")'),
+            ('kpi_html("30-day anomaly", anomaly_text, "vs CHIRPS 1991–2020 normal")', 'kpi_html("30-day anomaly", anomaly_text, "vs CHIRPS 1991–2020 normal", "kpi-coral")'),
+            ('kpi_html("Climate risk", f"{risk_dot} {risk_level}", "Latest available assessment")', 'kpi_html("Climate risk", f"{risk_dot} {risk_level}", "Latest available assessment", "kpi-yellow")'),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'Expected KPI call not found: {old}')
+              text = text.replace(old, new, 1)
+
+          text = text.replace('<div class="status-card"><div class="status-label">Rainfall condition</div>', '<div class="status-card status-drought"><div class="status-label">Rainfall condition</div>', 1)
+          text = text.replace('<div class="status-card"><div class="status-label">Climate risk</div>', '<div class="status-card status-risk"><div class="status-label">Climate risk</div>', 1)
+          text = text.replace('<div class="status-card"><div class="status-label">30-day observations</div>', '<div class="status-card status-observation"><div class="status-label">30-day observations</div>', 1)
+
+          old_spi = '        sp1.metric("SPI-3", vals[0]); sp2.metric("SPI-3 status", vals[1]); sp3.metric("SPI-6", vals[2]); sp4.metric("SPI-6 status", vals[3])'
+          new_spi = '''        with sp1:\n            st.markdown(f'<div class="spi-card spi-blue"><div class="spi-label">SPI-3</div><div class="spi-value">{vals[0]}</div></div>', unsafe_allow_html=True)\n        with sp2:\n            st.markdown(f'<div class="spi-card spi-yellow"><div class="spi-label">SPI-3 status</div><div class="spi-value">{vals[1]}</div></div>', unsafe_allow_html=True)\n        with sp3:\n            st.markdown(f'<div class="spi-card spi-blue"><div class="spi-label">SPI-6</div><div class="spi-value">{vals[2]}</div></div>', unsafe_allow_html=True)\n        with sp4:\n            st.markdown(f'<div class="spi-card spi-yellow"><div class="spi-label">SPI-6 status</div><div class="spi-value">{vals[3]}</div></div>', unsafe_allow_html=True)'''
+          if old_spi not in text:
+              raise SystemExit('Expected SPI metric line not found')
+          text = text.replace(old_spi, new_spi, 1)
+
+          p.write_text(text, encoding='utf-8')
+          print('Climate card palette applied successfully')
+
+      - name: Validate Python syntax
+        run: python -m py_compile 'pages/1_🌧_Climate_Monitoring.py'
+
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'pages/1_🌧_Climate_Monitoring.py'
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'style: apply palette colors to climate cards'
+            git push
+          fi
