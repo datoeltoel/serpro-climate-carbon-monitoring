@@ -1,0 +1,149 @@
+name: Fix Historical Climate UI
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix_historical_climate_ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Apply Historical Climate UI refinements
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('app_pages/historical_climate.py')
+          text = path.read_text(encoding='utf-8')
+
+          # 1) Remove the empty panel wrapper that rendered as a blank white card below the hero.
+          text = text.replace("st.markdown('<div class=\"panel\" style=\"margin-bottom:14px\">', unsafe_allow_html=True)\n", "", 1)
+          text = text.replace("st.markdown('</div>', unsafe_allow_html=True)\n\nif start_date > end_date:", "if start_date > end_date:", 1)
+
+          # 2) Move Data Quality & Information from the top to the very bottom.
+          dqi_pattern = re.compile(r'\nwith st\.expander\("ℹ️ Data Quality & Information", expanded=True\):.*?\n\ntab_snapshot,', re.S)
+          match = dqi_pattern.search(text)
+          if not match:
+              raise SystemExit('Data Quality & Information block not found')
+          dqi_block = match.group(0)
+          text = text[:match.start()] + '\n\ntab_snapshot,' + text[match.end():]
+
+          # 3) Make Climate Snapshot -> Monitoring summary collapsible.
+          old_summary = '''        st.markdown("### Monitoring summary")
+        st.dataframe(
+            view[[c for c in ["date", "scope", "rainfall_mm", "source", "processing_time_utc"] if c in view.columns]].tail(30),
+            use_container_width=True,
+            hide_index=True,
+        )'''
+          new_summary = '''        with st.expander("📋 Monitoring summary · attribute table", expanded=False):
+            st.caption("Open this table to inspect the latest rainfall attributes used in the selected monitoring period.")
+            st.dataframe(
+                view[[c for c in ["date", "scope", "rainfall_mm", "source", "processing_time_utc"] if c in view.columns]].tail(30),
+                use_container_width=True,
+                hide_index=True,
+            )'''
+          if old_summary not in text:
+              raise SystemExit('Monitoring summary block not found')
+          text = text.replace(old_summary, new_summary, 1)
+
+          # Rebuild Data Quality section for the bottom of the page.
+          bottom_dqi = '''\n\n# Data Quality & Information is intentionally placed at the bottom so the analytical outputs remain the primary reading flow.
+with st.expander("ℹ️ Data Quality & Information", expanded=False):
+    st.markdown("### Data sources & processing")
+    q1, q2, q3 = st.columns(3)
+    with q1:
+        st.markdown("**Historical rainfall**")
+        st.write("CHIRPS v2 Final")
+        st.caption("Daily CHIRPS precipitation is aggregated to monthly rainfall and spatially averaged over the selected SERPRO boundary.")
+    with q2:
+        st.markdown("**Rainfall anomaly baseline**")
+        st.write("CHIRPS v2 Final · 1991–2020")
+        st.caption("Rainfall anomaly is evaluated against the corresponding 1991–2020 climatological normal.")
+    with q3:
+        st.markdown("**Drought / wetness indicator**")
+        st.write("SPI-3 & SPI-6")
+        st.caption("Standardized wetness/dryness indicators derived from the historical rainfall distribution.")
+
+    st.markdown("### Methodology at a glance")
+    st.markdown(
+        """
+        1. **Historical rainfall:** CHIRPS daily precipitation is summed to monthly rainfall and spatially averaged over each SERPRO scope.
+        2. **30-year historical window:** the dashboard uses the latest complete 30-year CHIRPS period, **1996–2025**.
+        3. **Rainfall anomaly:** operational rainfall is compared with the CHIRPS **1991–2020** climatological baseline.
+        4. **SPI:** SPI-3 and SPI-6 describe standardized wetness/dryness relative to the historical rainfall distribution.
+        5. **Spatial metadata:** downloaded observations include **scope, longitude and latitude in EPSG:4326** for reproducible spatial use.
+        """
+    )
+
+    st.markdown("### Current data quality")
+    selected_days = int(view["date"].dt.normalize().nunique()) if not view.empty else 0
+    expected_days = int((pd.Timestamp(end_date) - pd.Timestamp(start_date)).days + 1)
+    missing_days = max(expected_days - selected_days, 0)
+    latest_processing = "—"
+    if "processing_time_utc" in scoped_all.columns:
+        times = pd.to_datetime(scoped_all["processing_time_utc"], errors="coerce", utc=True).dropna()
+        if not times.empty:
+            latest_processing = times.max().strftime("%Y-%m-%d %H:%M UTC")
+
+    coverage_pct = (selected_days / expected_days * 100) if expected_days else 0
+    quality_label = "Good" if missing_days == 0 else "Partial coverage"
+    quality_desc = "Complete daily coverage for the selected period." if missing_days == 0 else f"{missing_days} calendar day(s) are not represented in the selected period."
+
+    st.markdown("#### Current data quality")
+    st.markdown(
+        f"""
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:8px 0 16px;">
+          <div style="background:#E8F5FF;border:1px solid #C7E4FA;border-radius:14px;padding:14px 16px;min-height:112px;">
+            <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#4D6B7A;">Coverage</div>
+            <div style="font-size:1.55rem;font-weight:850;color:#146C94;margin-top:7px;">{coverage_pct:.1f}%</div>
+            <div style="font-size:.72rem;color:#6B7D86;margin-top:5px;">{selected_days} of {expected_days} expected days</div>
+          </div>
+          <div style="background:#EAF8F0;border:1px solid #BFE8D0;border-radius:14px;padding:14px 16px;min-height:112px;">
+            <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#4D6F5B;">Quality status</div>
+            <div style="font-size:1.45rem;font-weight:850;color:#19764A;margin-top:7px;">{quality_label}</div>
+            <div style="font-size:.72rem;color:#64766C;margin-top:5px;">{quality_desc}</div>
+          </div>
+          <div style="background:#FFF8DF;border:1px solid #F1E2A4;border-radius:14px;padding:14px 16px;min-height:112px;">
+            <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#77651E;">Missing days</div>
+            <div style="font-size:1.55rem;font-weight:850;color:#8A6B00;margin-top:7px;">{missing_days}</div>
+            <div style="font-size:.72rem;color:#766F55;margin-top:5px;">Calendar days without observation</div>
+          </div>
+          <div style="background:#F5EEFF;border:1px solid #DCC9F4;border-radius:14px;padding:14px 16px;min-height:112px;">
+            <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#66527D;">Latest processing</div>
+            <div style="font-size:1.08rem;font-weight:850;color:#6B3FA0;margin-top:10px;line-height:1.2;">{latest_processing}</div>
+            <div style="font-size:.72rem;color:#756A80;margin-top:5px;">Processing timestamp (UTC)</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.info(
+        "Historical climate products are analytical evidence and are not weather forecasts. "
+        "BMKG Local Weather Forecast is maintained on its own sub-page and is excluded from historical rainfall, anomaly, SPI and climate-risk calculations."
+    )
+'''
+
+          text = text.rstrip() + bottom_dqi + '\n'
+          path.write_text(text, encoding='utf-8')
+          print('Historical Climate UI refinements applied.')
+
+      - name: Validate Python syntax
+        run: python -m py_compile app_pages/historical_climate.py
+
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app_pages/historical_climate.py
+          git diff --cached --quiet || git commit -m 'fix: refine historical climate page layout'
+          git push
