@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any
 
 import streamlit as st
@@ -23,6 +24,15 @@ ROLE_PERMISSIONS = {
     "mrv_specialist": {"climate_monitoring", "vegetation_monitoring", "fire_monitoring", "climate_risk"},
 }
 
+# Backward-compatible aliases for the shorter usernames previously used in
+# Streamlit Secrets. This lets users sign in with the canonical role names
+# without requiring an immediate manual Secrets migration.
+USERNAME_ALIASES = {
+    "gis": "gis_specialist",
+    "forestry": "forestry_planner",
+    "mrv": "mrv_specialist",
+}
+
 
 def _plain(value: Any) -> Any:
     """Convert Streamlit Secrets containers to ordinary Python values."""
@@ -31,6 +41,17 @@ def _plain(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_plain(item) for item in value]
     return value
+
+
+def _add_username_aliases(credentials: dict[str, Any]) -> None:
+    """Add canonical usernames when only legacy aliases exist."""
+    usernames = credentials.get("usernames")
+    if not isinstance(usernames, dict):
+        return
+
+    for legacy, canonical in USERNAME_ALIASES.items():
+        if canonical not in usernames and legacy in usernames:
+            usernames[canonical] = deepcopy(usernames[legacy])
 
 
 def _secrets_config() -> dict[str, Any]:
@@ -43,6 +64,8 @@ def _secrets_config() -> dict[str, Any]:
 
     if not isinstance(credentials, dict) or not isinstance(cookie, dict):
         raise RuntimeError("Authentication requires [auth.credentials] and [auth.cookie].")
+
+    _add_username_aliases(credentials)
 
     usernames = credentials.get("usernames")
     if not isinstance(usernames, dict) or not usernames:
@@ -87,10 +110,15 @@ def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
     config = st.session_state.get("serpro_auth_config") or _secrets_config()
     usernames = config["credentials"]["usernames"]
 
+    # Restore an existing authenticator cookie without rendering a second
+    # login widget. Older deployments can throw here when the cookie/session
+    # schema changed, so a stale cookie must not crash the application.
     try:
         authenticator.login(location="unrendered")
     except Exception:
-        pass
+        st.session_state.pop("authentication_status", None)
+        st.session_state.pop("username", None)
+        st.session_state.pop("name", None)
 
     if st.session_state.get("authentication_status") is not True:
         st.markdown("## 🔐 SERPRO Climate & Carbon Monitoring")
@@ -105,12 +133,25 @@ def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
 
     username = str(st.session_state.get("username", ""))
     name = str(st.session_state.get("name", username))
+
+    # Do not access authenticator.credentials directly. The public
+    # streamlit-authenticator object does not expose that attribute reliably
+    # across supported versions; the validated Secrets configuration is the
+    # application source of truth for RBAC metadata.
     user = dict(usernames.get(username, {}))
     roles = user.get("roles", st.session_state.get("roles", []))
     if isinstance(roles, str):
         roles = [roles]
     roles = [str(r).lower() for r in roles]
-    st.session_state.update(serpro_user=username, serpro_name=name, serpro_roles=roles)
+
+    if username not in usernames:
+        raise RuntimeError(f"Authenticated username {username!r} is not present in the RBAC configuration.")
+
+    st.session_state.update(
+        serpro_user=username,
+        serpro_name=name,
+        serpro_roles=roles,
+    )
     return authenticator, username, name, roles
 
 
