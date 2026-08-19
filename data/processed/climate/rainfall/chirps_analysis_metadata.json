@@ -1,0 +1,25 @@
+{
+  "analysis": "CHIRPS long-term historical rainfall baseline",
+  "input_monthly": "data/processed/climate/rainfall/chirps_monthly_1981_2025.csv",
+  "input_climatology": "data/processed/climate/rainfall/chirps_climatology_1991_2020.csv",
+  "source": "UCSB-CHG/CHIRPS/DAILY",
+  "analysis_period": "1996-2025",
+  "climatology_period": "1991-2020",
+  "scope": [
+    "carbon_project_zone",
+    "project_area"
+  ],
+  "methods": {
+    "annual_rainfall": "sum of monthly CHIRPS precipitation",
+    "monthly_anomaly": "observed monthly rainfall minus 1991-2020 normal month",
+    "annual_anomaly": "sum of monthly departures from 1991-2020 normal",
+    "trend": "ordinary least-squares linear regression of annual rainfall versus year",
+    "trend_significance": "linear-regression p-value; not a Mann-Kendall test"
+  },
+  "generated_utc": "2026-08-19T09:04:50.451751+00:00",
+  "records": {
+    "monthly_30y": 720,
+    "annual_30y": 60,
+    "summary_scopes": 2
+  }
+}

@@ -1,0 +1,3 @@
+scope,analysis_period,years,mean_annual_rainfall_mm,annual_std_mm,annual_cv_pct,mean_annual_normal_mm,mean_annual_anomaly_mm,mean_annual_anomaly_pct,wettest_year,wettest_year_rainfall_mm,driest_year,driest_year_rainfall_mm,wettest_normal_month,driest_normal_month,linear_trend_mm_per_year,linear_trend_mm_per_decade,linear_trend_pct_per_decade,linear_trend_p_value,trend_r_squared
+carbon_project_zone,1996-2025,30,2840.6270,536.4140,18.8840,2742.1180,98.5080,3.5920,2010,4163.6440,1997,1633.1320,3,8,18.7265,187.2650,6.5920,0.0985,0.0945
+project_area,1996-2025,30,2852.0890,539.4260,18.9130,2755.1280,96.9620,3.5190,2010,4178.8820,1997,1645.2660,3,8,18.9724,189.7240,6.6520,0.0959,0.0959
