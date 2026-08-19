@@ -2,6 +2,9 @@ name: Analyze CHIRPS Baseline
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Build CHIRPS Baseline"]
+    types: [completed]
   push:
     paths:
       - "data/processed/climate/rainfall/chirps_monthly_1981_2025.csv"
@@ -14,6 +17,7 @@ permissions:
 
 jobs:
   analyze:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -65,7 +69,7 @@ jobs:
       - name: Commit analysis outputs
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+users.noreply.github.com"
           git add \
             data/processed/climate/rainfall/chirps_annual_1981_2025.csv \
             data/processed/climate/rainfall/chirps_monthly_30y_1996_2025.csv \
