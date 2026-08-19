@@ -1,1 +1,1 @@
-{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"BLOK I w"},"geometry":{"type":"Polygon","coordinates":[[[112.5322006579,-3.0862068284],[112.5321670796,-3.0859695729],[112.5322006579,-3.0862068284]]]}}]}
+{"type":"FeatureCollection","name":"SERPRO Project Area (Concession)","features":[{"type":"Feature","properties":{"name":"SERPRO Project Area","source":"KAL_Boundary_Split.kml","generalized_for_web":true,"simplification_tolerance_degrees":0.0001},"geometry":{"type":"MultiPolygon","coordinates":[]}}]}
