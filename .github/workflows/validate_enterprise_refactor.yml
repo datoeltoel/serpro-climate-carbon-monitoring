@@ -1,0 +1,61 @@
+name: Validate Enterprise Refactor
+
+on:
+  push:
+    branches:
+      - refactor/phase-1-2-enterprise-ui
+    paths:
+      - 'app.py'
+      - 'pages/**'
+      - 'utils/auth.py'
+      - 'utils/enterprise_ui.py'
+      - 'requirements.txt'
+      - '.streamlit/config.toml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'app.py'
+      - 'pages/**'
+      - 'utils/auth.py'
+      - 'utils/enterprise_ui.py'
+      - 'requirements.txt'
+      - '.streamlit/config.toml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install required runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install streamlit>=1.40,<2 streamlit-authenticator==0.4.2 folium==0.19.5 streamlit-folium==0.24.0
+
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile app.py
+          python -m py_compile utils/auth.py
+          python -m py_compile utils/enterprise_ui.py
+          python -m py_compile pages/1_Executive_Summary.py
+          python -m py_compile pages/2_MRV_Carbon_Tracker.py
+          python -m py_compile pages/3_Climate_Monitoring.py
+          python -m py_compile pages/4_Spatial_Data_Catalog.py
+
+      - name: Validate Streamlit imports
+        run: |
+          python - <<'PY'
+          import streamlit
+          import streamlit_authenticator
+          import folium
+          import streamlit_folium
+          print('Enterprise UI dependencies imported successfully')
+          PY
