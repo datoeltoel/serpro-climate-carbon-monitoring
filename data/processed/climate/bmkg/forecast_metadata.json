@@ -15,7 +15,7 @@
   "idw_resolution_m": 1000,
   "project_zone": "SERPRO Carbon Project Zone",
   "interpretation": "Forecast conditions interpolated from five BMKG ADM4 pilot villages using IDW. Not direct station observations and excluded from historical Climate Risk calculations.",
-  "fetched_at_utc": "2026-08-19T03:24:21.459390+00:00",
+  "fetched_at_utc": "2026-08-19T03:46:55.624105+00:00",
   "quality": [
     {
       "location": "Pematang Limau",
