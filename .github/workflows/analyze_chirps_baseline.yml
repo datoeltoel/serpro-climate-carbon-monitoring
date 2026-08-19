@@ -1,0 +1,76 @@
+name: Analyze CHIRPS Baseline
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "data/processed/climate/rainfall/chirps_monthly_1981_2025.csv"
+      - "data/processed/climate/rainfall/chirps_climatology_1991_2020.csv"
+      - "scripts/analyze_chirps_baseline.py"
+      - ".github/workflows/analyze_chirps_baseline.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate CHIRPS baseline inputs
+        run: |
+          test -s data/processed/climate/rainfall/chirps_monthly_1981_2025.csv
+          test -s data/processed/climate/rainfall/chirps_climatology_1991_2020.csv
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          base = Path("data/processed/climate/rainfall")
+          monthly = pd.read_csv(base / "chirps_monthly_1981_2025.csv")
+          clim = pd.read_csv(base / "chirps_climatology_1991_2020.csv")
+          required_m = {"year", "month", "scope", "rainfall_mm"}
+          required_c = {"scope", "month", "normal_mean_mm"}
+          assert required_m.issubset(monthly.columns), monthly.columns.tolist()
+          assert required_c.issubset(clim.columns), clim.columns.tolist()
+          assert monthly["year"].min() <= 1981
+          assert monthly["year"].max() >= 2025
+          assert monthly["scope"].nunique() >= 1
+          print(f"Monthly rows: {len(monthly)}")
+          print(f"Climatology rows: {len(clim)}")
+          print(f"Scopes: {sorted(monthly['scope'].astype(str).unique())}")
+          PY
+
+      - name: Analyze CHIRPS baseline
+        run: python scripts/analyze_chirps_baseline.py
+
+      - name: Validate analysis outputs
+        run: |
+          test -s data/processed/climate/rainfall/chirps_annual_1981_2025.csv
+          test -s data/processed/climate/rainfall/chirps_monthly_30y_1996_2025.csv
+          test -s data/processed/climate/rainfall/chirps_annual_anomaly_1996_2025.csv
+          test -s data/processed/climate/rainfall/chirps_30y_summary_1996_2025.csv
+          test -s data/processed/climate/rainfall/chirps_analysis_metadata.json
+
+      - name: Commit analysis outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            data/processed/climate/rainfall/chirps_annual_1981_2025.csv \
+            data/processed/climate/rainfall/chirps_monthly_30y_1996_2025.csv \
+            data/processed/climate/rainfall/chirps_annual_anomaly_1996_2025.csv \
+            data/processed/climate/rainfall/chirps_30y_summary_1996_2025.csv \
+            data/processed/climate/rainfall/chirps_analysis_metadata.json
+          git diff --cached --quiet || git commit -m "data: analyze CHIRPS historical baseline"
+          git push
