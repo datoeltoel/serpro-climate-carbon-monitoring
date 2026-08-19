@@ -25,11 +25,7 @@ ROLE_PERMISSIONS = {
 
 
 def _plain(value: Any) -> Any:
-    """Convert Streamlit Secrets containers to ordinary Python values.
-
-    Do not use copy.deepcopy() on st.secrets: Streamlit's Secrets object
-    recursively proxies nested values and deepcopy can recurse indefinitely.
-    """
+    """Convert Streamlit Secrets containers to ordinary Python values."""
     if isinstance(value, Mapping):
         return {str(key): _plain(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
@@ -75,6 +71,7 @@ def get_authenticator() -> stauth.Authenticate:
     if "serpro_authenticator" not in st.session_state:
         config = _secrets_config()
         cookie = config["cookie"]
+        st.session_state.serpro_auth_config = config
         st.session_state.serpro_authenticator = stauth.Authenticate(
             credentials=config["credentials"],
             cookie_name=str(cookie["name"]),
@@ -87,6 +84,9 @@ def get_authenticator() -> stauth.Authenticate:
 
 def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
     authenticator = get_authenticator()
+    config = st.session_state.get("serpro_auth_config") or _secrets_config()
+    usernames = config["credentials"]["usernames"]
+
     try:
         authenticator.login(location="unrendered")
     except Exception:
@@ -105,7 +105,7 @@ def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
 
     username = str(st.session_state.get("username", ""))
     name = str(st.session_state.get("name", username))
-    user = dict(authenticator.credentials.get("usernames", {}).get(username, {}))
+    user = dict(usernames.get(username, {}))
     roles = user.get("roles", st.session_state.get("roles", []))
     if isinstance(roles, str):
         roles = [roles]
