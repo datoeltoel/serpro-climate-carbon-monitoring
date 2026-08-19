@@ -1,12 +1,18 @@
 [theme]
-base = "light"
-primaryColor = "#156064"
-backgroundColor = "#F7FAF9"
-secondaryBackgroundColor = "#FFFFFF"
-textColor = "#173F42"
+base = "dark"
+primaryColor = "#2E9B72"
+backgroundColor = "#071B17"
+secondaryBackgroundColor = "#0E2A24"
+textColor = "#F4F7F6"
 font = "sans serif"
+
+[client]
+showErrorDetails = "friendly"
+showSidebarNavigation = true
 
 [server]
 headless = true
+enableXsrfProtection = true
+enableCORS = false
 
-# Vegetation dashboard readability: explicit light theme.
+# Enterprise baseline: dark, clean, high-contrast UI.
