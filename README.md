@@ -101,7 +101,8 @@ streamlit run app.py
 
 **MVP → Scope-aware live climate feeds → automated hotspot monitoring → vegetation change → peatland hydrology → MRV & carbon risk → reporting/export.**
 
-## Streamlit Apss
+## Streamlit App
 
-**Click link here to accessed →**
+**Please Click link below to access it → 
+https://serpro-climate-carbon-monitoring-bpfs5yznuenuxemaweilgs.streamlit.app/**
 
