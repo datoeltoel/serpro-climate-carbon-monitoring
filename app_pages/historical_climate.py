@@ -75,6 +75,58 @@ if start_date > end_date:
 view = scoped_all[(scoped_all["date"].dt.date >= start_date) & (scoped_all["date"].dt.date <= end_date)].copy()
 
 # -----------------------------------------------------------------------------
+# Data Quality & Information
+# -----------------------------------------------------------------------------
+# Keep methodology and provenance visible on the dashboard so readers can
+# interpret the historical evidence without needing to inspect the repository.
+with st.expander("ℹ️ Data Quality & Information", expanded=True):
+    st.markdown("### Data sources & processing")
+    q1, q2, q3 = st.columns(3)
+    with q1:
+        st.markdown("**Historical rainfall**")
+        st.write("NASA GPM IMERG V07")
+        st.caption("Daily precipitation aggregated from 30-minute IMERG observations using zonal mean over the selected SERPRO boundary.")
+    with q2:
+        st.markdown("**Rainfall anomaly baseline**")
+        st.write("CHIRPS v2 Final · 1991–2020")
+        st.caption("Current rainfall is compared with the climatological mean for the same calendar month-day. 7-day and 30-day rolling anomalies are calculated.")
+    with q3:
+        st.markdown("**Drought / wetness indicator**")
+        st.write("SPI-3 & SPI-6")
+        st.caption("Gamma-distribution fitting followed by normal-standard transformation, using CHIRPS historical rainfall distribution and current GPM rainfall.")
+
+    st.markdown("### Methodology at a glance")
+    st.markdown(
+        """
+        1. **Rainfall:** daily rainfall is derived from NASA GPM IMERG V07 and summarized for the selected monitoring boundary.
+        2. **Rainfall anomaly:** the current 7-day and 30-day accumulated rainfall is compared with the corresponding CHIRPS 1991–2020 climatological baseline.
+        3. **Climate status:** the 30-day anomaly is classified as very wet, wet, normal, dry, or drought when a complete 30-day observation window is available.
+        4. **SPI:** SPI-3 and SPI-6 represent standardized wetness/dryness relative to the historical CHIRPS distribution. Values near zero are normal; negative values indicate drier conditions and positive values indicate wetter conditions.
+        5. **Climate risk:** the dashboard displays the downstream climate-risk output based on 30-day rainfall anomaly, SPI-3 and SPI-6. The current risk implementation is provisional and is separate from the BMKG operational forecast.
+        """
+    )
+
+    st.markdown("### Current data quality")
+    selected_days = int(view["date"].dt.normalize().nunique()) if not view.empty else 0
+    expected_days = int((pd.Timestamp(end_date) - pd.Timestamp(start_date)).days + 1)
+    missing_days = max(expected_days - selected_days, 0)
+    latest_processing = "—"
+    if "processing_time_utc" in scoped_all.columns:
+        times = pd.to_datetime(scoped_all["processing_time_utc"], errors="coerce", utc=True).dropna()
+        if not times.empty:
+            latest_processing = times.max().strftime("%Y-%m-%d %H:%M UTC")
+    qc1, qc2, qc3, qc4 = st.columns(4)
+    qc1.metric("Observations in period", selected_days)
+    qc2.metric("Expected calendar days", expected_days)
+    qc3.metric("Missing days", missing_days)
+    qc4.metric("Latest processing", latest_processing)
+
+    st.info(
+        "Interpretation note: historical climate products are analytical evidence and are not weather forecasts. "
+        "BMKG Local Weather Forecast is intentionally maintained on its own sub-page and is excluded from historical rainfall, anomaly, SPI and climate-risk calculations."
+    )
+
+# -----------------------------------------------------------------------------
 # Historical Climate sub-pages are represented as tabs inside this dedicated
 # Historical Climate page. BMKG forecast is intentionally absent from this
 # module and lives on its own Climate Monitoring page.
@@ -173,7 +225,7 @@ with tab_trend:
     else:
         fig = go.Figure()
         fig.add_scatter(x=view["date"], y=view["rainfall_mm"], mode="lines+markers", name="Rainfall")
-        fig.update_layout(height=430, margin=dict(l=10, r=10, t=20, b=10), yaxis_title="Rainfall (mm)", xaxis_title="Date")
+        fig.update_layout(height=430, margin=dict(l=10, r=10, t=10, b=10), yaxis_title="Rainfall (mm)", xaxis_title="Date")
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         st.markdown("### Climate risk history")
         if not risk.empty and "scope" in risk.columns:
