@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 import requests
 
+# BMKG forecast ingestion configuration — forecast only; never used in climate-risk calculations.
 BMKG_LOCATIONS = {
     "Pematang Limau": "62.07.01.2005",
     "Tanjung Rangas": "62.07.01.2007",
@@ -27,7 +28,6 @@ def _num(value: Any) -> float | None:
 
 def _parse_location(payload: dict, name: str, adm4: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    # BMKG forecast responses have weather lists under data[].cuaca, usually nested by day.
     for block in payload.get("data", []) or []:
         cuaca = block.get("cuaca", []) if isinstance(block, dict) else []
         if isinstance(cuaca, dict):
@@ -75,7 +75,7 @@ def load_bmkg_forecast(timeout: int = 20) -> tuple[pd.DataFrame, dict[str, Any]]
             location_rows = _parse_location(payload, name, adm4)
             rows.extend(location_rows)
             quality.append({"location": name, "adm4": adm4, "status": "OK", "records": len(location_rows), "error": ""})
-        except Exception as exc:  # keep dashboard alive if one location is unavailable
+        except Exception as exc:
             quality.append({"location": name, "adm4": adm4, "status": "ERROR", "records": 0, "error": str(exc)[:180]})
 
     df = pd.DataFrame(rows)
