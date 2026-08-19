@@ -1,0 +1,61 @@
+name: Phase 1 RBAC Hardening
+
+on:
+  push:
+    branches:
+      - fix/phase-1-rbac-hardening
+  workflow_dispatch:
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'streamlit>=1.40,<2' 'streamlit-authenticator==0.4.2'
+      - name: Compile Phase 1
+        run: |
+          python -m py_compile app.py utils/auth.py pages/1_Executive_Summary.py pages/2_MRV_Carbon_Tracker.py pages/3_Climate_Monitoring.py pages/4_Spatial_Data_Catalog.py
+      - name: Check RBAC implementation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          auth = Path('utils/auth.py').read_text()
+          app = Path('app.py').read_text()
+          assert 'streamlit_authenticator' in auth
+          assert 'ROLE_PERMISSIONS' in auth
+          assert 'require_authentication' in auth
+          assert 'require_role' in auth
+          assert 'usernames' in auth
+          assert 'st.navigation(' in app
+          assert 'visibility="hidden"' in app
+          for p in [
+              'pages/1_Executive_Summary.py',
+              'pages/2_MRV_Carbon_Tracker.py',
+              'pages/3_Climate_Monitoring.py',
+              'pages/4_Spatial_Data_Catalog.py',
+          ]:
+              assert Path(p).exists(), p
+          print('Phase 1 architecture and RBAC contract: PASS')
+          PY
+      - name: Check validated Secrets template
+        run: |
+          python - <<'PY'
+          text = Path('docs/RBAC_SECRETS_TEMPLATE.toml').read_text()
+          for token in [
+              '[auth.cookie]',
+              '[auth.credentials.usernames.management]',
+              '[auth.credentials.usernames.gis]',
+              '[auth.credentials.usernames.forestry]',
+              '[auth.credentials.usernames.mrv]',
+          ]:
+              assert token in text, token
+          assert 'REPLACE_WITH_BCRYPT_HASH' in text
+          assert 'user_management' not in text
+          print('RBAC Secrets template: PASS')
+          PY
