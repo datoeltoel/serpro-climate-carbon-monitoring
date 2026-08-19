@@ -61,8 +61,18 @@ operational_pages = {
     ],
 }
 
-# Reuse existing RBAC permission keys. F1-01 does not alter authentication or
-# the permission matrix; enterprise pages inherit the relevant domain access.
+# F1-01 Guest operational viewer contract:
+# Guest must always be able to open the four field-operational monitoring
+# domains, while remaining read-only because page navigation itself grants no
+# write/admin capability. Keep this explicit at the navigation layer so a
+# stale/incomplete permission matrix cannot silently hide operational pages.
+GUEST_OPERATIONAL_VIEWER = {
+    "climate_monitoring",
+    "vegetation_monitoring",
+    "fire_monitoring",
+    "climate_risk",
+}
+
 enterprise_allowed = {
     "executive_summary": bool(roles),
     "mrv_carbon_tracker": has_permission("vegetation_monitoring", roles),
@@ -77,7 +87,15 @@ for section, entries in enterprise_pages.items():
         navigation[section] = allowed
 
 for section, entries in operational_pages.items():
-    allowed = [page for key, page in entries if has_permission(key, roles)]
+    allowed = []
+    for key, page in entries:
+        # Explicit guest viewer allowance is intentional and limited to the
+        # operational monitoring pages above. Other roles continue to use the
+        # central RBAC permission matrix.
+        if "guest" in roles and key in GUEST_OPERATIONAL_VIEWER:
+            allowed.append(page)
+        elif has_permission(key, roles):
+            allowed.append(page)
     if allowed:
         navigation[section] = allowed
 
