@@ -30,14 +30,12 @@ with st.sidebar:
     st.markdown("#### Data Sources")
     st.caption("GPM IMERG · CHIRPS · VIIRS S-NPP / NOAA-20 · Sentinel-2 · MODIS · BMKG Open Data")
 
-# Single deterministic navigation registry. Existing analytical modules remain
-# registered and are not recalculated or replaced by the enterprise shell.
 enterprise_pages = {
     "EXECUTIVE SUMMARY": [
         ("executive_summary", st.Page("pages/1_Executive_Summary.py", title="Executive Summary", icon="📊", url_path="executive_summary", default=True)),
     ],
     "MRV CARBON TRACKER": [
-        ("mrv_carbon_tracker", st.Page("pages/2_MRV_Carbon_Tracker.py", title="MRV Carbon Tracker", icon="🌳", url_path="mrv_carbon_tracker")),
+        ("mrv_carbon_tracker", st.Page("pages/2_MRV_Carbon_Tracker_Phase2.py", title="MRV Carbon Tracker", icon="🌳", url_path="mrv_carbon_tracker")),
     ],
     "CLIMATE MONITORING": [
         ("climate_monitoring", st.Page("pages/3_Climate_Monitoring.py", title="Climate Monitoring", icon="🌦️", url_path="climate_monitoring")),
@@ -86,6 +84,5 @@ for section, entries in operational_pages.items():
     if allowed:
         navigation[section] = allowed
 
-# Single source of truth: exactly one Streamlit navigation call.
 pg = st.navigation(navigation, position="sidebar", expanded=True)
 pg.run()
