@@ -1,9 +1,10 @@
+import io
 import json
 from pathlib import Path
 
 import pandas as pd
-import streamlit as st
 import plotly.express as px
+import streamlit as st
 
 from utils.climate.rainfall import load_rainfall
 from utils.climate.anomaly import load_anomaly
@@ -24,59 +25,66 @@ BMKG_SURFACES = {
 st.markdown(
     """
     <style>
-    :root {
-        --serpro-deep:#156064; --serpro-green:#00C49A; --serpro-yellow:#F8E16C;
-        --serpro-coral:#FFC2B4; --serpro-orange:#FB8F67; --serpro-ink:#16383A;
-        --serpro-muted:#5E7779; --serpro-line:#DDE9E7; --serpro-soft:#F5FAF9;
-    }
-    .climate-hero{background:linear-gradient(135deg,#F5FAF9 0%,#FFF 72%);border:1px solid var(--serpro-line);border-radius:18px;padding:22px 24px;margin-bottom:16px}
-    .climate-eyebrow{color:var(--serpro-deep);font-size:.72rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
-    .climate-title{color:var(--serpro-ink);font-size:2rem;font-weight:850;margin:2px 0 4px}
-    .climate-subtitle{color:var(--serpro-muted);font-size:.92rem;margin:0}
-    .section-title{color:var(--serpro-ink);font-size:1.18rem;font-weight:800;margin:22px 0 8px}
-    .section-note{color:var(--serpro-muted);font-size:.78rem;margin:-3px 0 10px}
-    .kpi,.status-card,.spi-card{border:1px solid var(--serpro-line);border-radius:15px}
-    .kpi{padding:15px 16px;min-height:112px;box-shadow:0 2px 10px rgba(21,96,100,.06)}
-    .kpi-green{background:#E8FBF5;border-color:#BCEFE1}.kpi-deep{background:#EAF5F5;border-color:#C6E2E2}
-    .kpi-yellow{background:#FFF9D9;border-color:#F3E7A1}.kpi-coral{background:#FFF0EC;border-color:#FFD1C7}
-    .kpi-label,.status-label,.spi-label{color:var(--serpro-muted);font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
-    .kpi-value{color:var(--serpro-ink);font-size:1.65rem;font-weight:850;line-height:1.15;margin-top:7px}
-    .kpi-note,.status-desc{color:var(--serpro-muted);font-size:.72rem;margin-top:6px}
-    .kpi-green .kpi-value{color:#087A65}.kpi-deep .kpi-value{color:var(--serpro-deep)}
-    .kpi-yellow .kpi-value{color:#8A6B00}.kpi-coral .kpi-value{color:#D94F35}
-    .status-card{padding:17px 18px;min-height:126px}.status-drought{background:#FFF0EC;border-color:#FFD1C7}
-    .status-risk{background:#FFF3E8;border-color:#FFD2B8}.status-observation{background:#E8FBF5;border-color:#BCEFE1}
-    .status-value{color:var(--serpro-ink);font-size:1.55rem;font-weight:850;margin-top:5px;line-height:1.15}
-    .status-drought .status-value{color:#D94F35;font-size:1.28rem}.status-risk .status-value{color:#D96822;font-size:1.35rem}
-    .status-observation .status-value{color:#087A65;font-size:1.35rem}
-    .spi-card{padding:15px 16px;min-height:100px}.spi-blue{background:#EAF5F5;border-color:#C6E2E2}.spi-yellow{background:#FFF9D9;border-color:#F3E7A1}
-    .spi-value{color:var(--serpro-ink);font-size:1.35rem;font-weight:800;margin-top:6px;line-height:1.1}
-    .info-strip{background:#F5FAF9;border:1px solid var(--serpro-line);border-radius:14px;padding:13px 16px;color:var(--serpro-muted);font-size:.78rem}
-    .legend-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}.legend-item{display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--serpro-muted)}
-    .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+    :root{--deep:#156064;--green:#00C49A;--yellow:#F8E16C;--coral:#FFC2B4;--orange:#FB8F67;--ink:#16383A;--muted:#5E7779;--line:#DDE9E7;--soft:#F5FAF9}
+    .hero{background:linear-gradient(135deg,#F5FAF9 0%,#FFF 72%);border:1px solid var(--line);border-radius:18px;padding:22px 24px;margin-bottom:16px}
+    .eyebrow{color:var(--deep);font-size:.72rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.title{color:var(--ink);font-size:2rem;font-weight:850;margin:2px 0 4px}.subtitle{color:var(--muted);font-size:.92rem;margin:0}
+    .section{color:var(--ink);font-size:1.18rem;font-weight:800;margin:22px 0 8px}.note{color:var(--muted);font-size:.78rem;margin:-3px 0 10px}.info{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:13px 16px;color:var(--muted);font-size:.78rem}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+
+def to_excel_bytes(df: pd.DataFrame, sheet_name: str = "Data") -> bytes:
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name[:31])
+    output.seek(0)
+    return output.getvalue()
+
+
+def add_downloads(df: pd.DataFrame, stem: str, sheet_name: str = "Data", key_prefix: str = "download") -> None:
+    if df is None or df.empty:
+        return
+    excel_bytes = to_excel_bytes(df, sheet_name)
+    csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
+    d1, d2 = st.columns(2)
+    with d1:
+        st.download_button("⬇ Download Excel", excel_bytes, file_name=f"{stem}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"{key_prefix}_xlsx")
+    with d2:
+        st.download_button("⬇ Download CSV", csv_bytes, file_name=f"{stem}.csv", mime="text/csv", key=f"{key_prefix}_csv")
+
+
+def load_spatial_surface(path: Path) -> pd.DataFrame:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    rows = []
+    for feature in payload.get("features", []):
+        props = feature.get("properties", {}) or {}
+        geom = feature.get("geometry", {}) or {}
+        coords = geom.get("coordinates", []) or []
+        if geom.get("type") == "Point" and len(coords) >= 2:
+            rows.append({**props, "longitude": coords[0], "latitude": coords[1]})
+    return pd.DataFrame(rows)
+
 rainfall = load_rainfall()
 anomaly = load_anomaly()
 spi = load_spi()
 risk = load_risk()
+bmkg_df, bmkg_meta = load_bmkg_forecast()
 
 st.markdown(
     """
-    <div class="climate-hero">
-      <div class="climate-eyebrow">SERPRO Project · Climate & Carbon Monitoring</div>
-      <div class="climate-title">🌧 Climate Monitoring</div>
-      <p class="climate-subtitle">Operational BMKG weather forecast, historical rainfall, anomaly, drought/wetness indicators and climate risk in one monitoring page.</p>
+    <div class="hero">
+      <div class="eyebrow">SERPRO Project · Climate & Carbon Monitoring</div>
+      <div class="title">🌧 Climate Monitoring</div>
+      <p class="subtitle">Historical climate evidence and operational BMKG local weather forecast, kept separate for transparent monitoring and reproducible analysis.</p>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
 if rainfall.empty:
-    st.warning("Belum ada data rainfall otomatis. Jalankan **Update SERPRO Rainfall** di GitHub Actions terlebih dahulu.")
+    st.warning("Belum ada data rainfall otomatis. Jalankan Update SERPRO Rainfall di GitHub Actions terlebih dahulu.")
     st.stop()
 
 rainfall["date"] = pd.to_datetime(rainfall["date"], errors="coerce")
@@ -86,47 +94,32 @@ if not valid_scopes:
     st.error("Tidak ditemukan monitoring scope yang valid pada data rainfall.")
     st.stop()
 
-st.markdown('<div class="section-title">Monitoring area & period</div>', unsafe_allow_html=True)
-fc1, fc2, fc3 = st.columns([1.3, 1, .9])
-with fc1:
-    scope = st.selectbox(
-        "Monitoring area", valid_scopes,
-        format_func=lambda x: {"project_area":"🟢 SERPRO Project Area · analysis","carbon_project_zone":"🟣 Carbon Project Zone · reference"}.get(x, x.replace("_"," ").title()),
-    )
+st.markdown('<div class="section">Monitoring area & period</div>', unsafe_allow_html=True)
+f1, f2, f3 = st.columns([1.3, 1, .9])
+with f1:
+    scope = st.selectbox("Monitoring area", valid_scopes, format_func=lambda x: {"project_area":"🟢 SERPRO Project Area · analysis","carbon_project_zone":"🟣 Carbon Project Zone · reference"}.get(x, x.replace("_", " ").title()))
 scoped_all = rainfall[rainfall["scope"] == scope].copy().sort_values("date")
-if scoped_all.empty:
-    st.warning("Belum ada data rainfall untuk scope yang dipilih.")
-    st.stop()
 min_date, max_date = scoped_all["date"].min().date(), scoped_all["date"].max().date()
-with fc2:
-    start_date = st.date_input("Start date", value=max(min_date, max_date-pd.Timedelta(days=29)), min_value=min_date, max_value=max_date)
-with fc3:
+with f2:
+    start_date = st.date_input("Start date", value=max(min_date, max_date - pd.Timedelta(days=29)), min_value=min_date, max_value=max_date)
+with f3:
     end_date = st.date_input("End date", value=max_date, min_value=min_date, max_value=max_date)
-preset = st.selectbox("Quick range", ["Custom","Latest 7D","Latest 30D","Latest 90D","Year to date"], index=2)
+preset = st.selectbox("Quick range", ["Custom", "Latest 7D", "Latest 30D", "Latest 90D", "Year to date"], index=2)
 if preset != "Custom":
-    start_date = {
-        "Latest 7D": max(min_date,max_date-pd.Timedelta(days=6)),
-        "Latest 30D": max(min_date,max_date-pd.Timedelta(days=29)),
-        "Latest 90D": max(min_date,max_date-pd.Timedelta(days=89)),
-        "Year to date": max(min_date,pd.Timestamp(max_date.year,1,1).date()),
-    }[preset]
+    start_date = {"Latest 7D": max(min_date, max_date - pd.Timedelta(days=6)), "Latest 30D": max(min_date, max_date - pd.Timedelta(days=29)), "Latest 90D": max(min_date, max_date - pd.Timedelta(days=89)), "Year to date": max(min_date, pd.Timestamp(max_date.year, 1, 1).date())}[preset]
     end_date = max_date
 if start_date > end_date:
     st.error("Start date harus lebih kecil atau sama dengan End date.")
     st.stop()
 scoped = scoped_all[(scoped_all["date"].dt.date >= start_date) & (scoped_all["date"].dt.date <= end_date)].copy()
-if scoped.empty:
-    st.warning("Tidak ada data pada periode yang dipilih.")
-    st.stop()
 
-# -------------------------------------------------------------------------
-# 1. BMKG operational forecast — always first.
-# -------------------------------------------------------------------------
-bmkg_df, bmkg_meta = load_bmkg_forecast()
-st.markdown('<div class="section-title">📡 BMKG Local Weather Forecast</div>', unsafe_allow_html=True)
-st.markdown('<div class="section-note">Operational 3-day BMKG forecast for five pilot monitoring locations. Forecast information is separate from historical rainfall, anomaly, SPI and climate-risk calculations.</div>', unsafe_allow_html=True)
+# -----------------------------------------------------------------------------
+# 1. BMKG LOCAL WEATHER FORECAST
+# -----------------------------------------------------------------------------
+st.markdown('<div class="section">📡 BMKG Local Weather Forecast</div>', unsafe_allow_html=True)
+st.markdown('<div class="note">Operational 3-day forecast from BMKG ADM4 pilot villages. Forecast data are not historical observations and are excluded from Climate Risk calculations.</div>', unsafe_allow_html=True)
 if bmkg_df.empty:
-    st.warning("BMKG forecast is temporarily unavailable. Existing historical climate analytics remain unchanged.")
+    st.warning("BMKG forecast is temporarily unavailable. Historical climate analytics remain unchanged.")
 else:
     locs = sorted(bmkg_df["location"].dropna().unique().tolist())
     selected_bmkg = st.selectbox("BMKG location", ["All locations"] + locs, key="bmkg_location")
@@ -138,226 +131,156 @@ else:
             weather = row.get("weather_desc_en") or row.get("weather_desc") or "—"
             with col:
                 st.metric(str(row["location"]), f"{row['temperature_c']:.1f} °C" if pd.notna(row.get("temperature_c")) else "—", weather)
-        forecast_cols = ["location","local_datetime","temperature_c","humidity_pct","precipitation_mm","wind_speed_ms","wind_direction","cloud_cover_pct","weather_desc_en"]
+
+        forecast_cols = ["location", "adm4", "latitude", "longitude", "local_datetime", "temperature_c", "humidity_pct", "precipitation_mm", "wind_speed_ms", "wind_direction", "cloud_cover_pct", "visibility", "weather_desc_en", "analysis_date"]
         available = [c for c in forecast_cols if c in local_view.columns]
-        forecast = local_view[available].sort_values(["location","local_datetime"]).copy()
-        forecast = forecast.rename(columns={
-            "local_datetime":"Local time","temperature_c":"Temp (°C)","humidity_pct":"RH (%)",
-            "precipitation_mm":"Precipitation (mm)","wind_speed_ms":"Wind (m/s)",
-            "wind_direction":"Wind direction","cloud_cover_pct":"Cloud (%)","weather_desc_en":"Weather"
-        })
-        st.dataframe(forecast, use_container_width=True, hide_index=True)
-        st.caption("Source: BMKG Open Data · 3-day forecast · 3-hour interval · Forecast data is not historical climate data and is not included in Climate Risk.")
+        forecast_raw = local_view[available].sort_values(["location", "local_datetime"]).copy()
+        forecast_display = forecast_raw.rename(columns={"local_datetime":"Local time", "temperature_c":"Temp (°C)", "humidity_pct":"RH (%)", "precipitation_mm":"Precipitation (mm)", "wind_speed_ms":"Wind (m/s)", "wind_direction":"Wind direction", "cloud_cover_pct":"Cloud (%)", "weather_desc_en":"Weather"})
+        st.dataframe(forecast_display, use_container_width=True, hide_index=True)
+        add_downloads(forecast_raw, f"SERPRO_BMKG_Forecast_{pd.Timestamp.now().strftime('%Y%m%d')}", "BMKG Forecast", "bmkg_forecast")
         q = bmkg_meta.get("quality")
         if q is not None and not q.empty:
             with st.expander("BMKG data quality & provenance"):
                 st.dataframe(q, use_container_width=True, hide_index=True)
-                st.write(f"Fetched (UTC): {bmkg_meta.get('fetched_at_utc','—')}")
+                st.write(f"Fetched (UTC): {bmkg_meta.get('fetched_at_utc', '—')}")
+                st.caption("Latitude and longitude are included in the download so the five ADM4 forecast locations can be recreated in GIS applications.")
 
-# -------------------------------------------------------------------------
-# 2. BMKG spatial forecast — merged from the former standalone page.
-# -------------------------------------------------------------------------
-st.markdown('<div class="section-title">🗺️ BMKG Spatial Weather Forecast</div>', unsafe_allow_html=True)
-st.markdown('<div class="section-note">ADM4 BMKG forecast points interpolated with IDW and clipped to the selected SERPRO monitoring boundary. This is an operational forecast surface, not direct station observation.</div>', unsafe_allow_html=True)
+# -----------------------------------------------------------------------------
+# 2. BMKG SPATIAL FORECAST
+# -----------------------------------------------------------------------------
+st.markdown('<div class="section">🗺️ BMKG Spatial Weather Forecast</div>', unsafe_allow_html=True)
+st.markdown('<div class="note">Five BMKG ADM4 forecast points interpolated using IDW and clipped to the selected SERPRO boundary. This represents forecast conditions, not direct station observations.</div>', unsafe_allow_html=True)
 spatial_path = BMKG_SURFACES.get(scope)
 if spatial_path is None or not spatial_path.exists():
     st.info("BMKG spatial forecast surface is not available yet for the selected monitoring area.")
 else:
     try:
-        payload = json.loads(spatial_path.read_text(encoding="utf-8"))
-        rows = []
-        for feature in payload.get("features", []):
-            props = feature.get("properties", {})
-            coords = feature.get("geometry", {}).get("coordinates", [])
-            if len(coords) >= 2:
-                rows.append({**props, "longitude": coords[0], "latitude": coords[1]})
-        spatial_df = pd.DataFrame(rows)
+        spatial_df = load_spatial_surface(spatial_path)
     except Exception as exc:
         spatial_df = pd.DataFrame()
         st.warning(f"Could not read BMKG spatial forecast: {exc}")
-
     if not spatial_df.empty:
         if "forecast_datetime" in spatial_df.columns:
             spatial_df["forecast_datetime"] = pd.to_datetime(spatial_df["forecast_datetime"], errors="coerce")
-        variables = {
-            "Precipitation (mm)": "precipitation_mm",
-            "Temperature (°C)": "temperature_c",
-            "Humidity (%)": "humidity_pct",
-            "Cloud cover (%)": "cloud_cover_pct",
-            "Wind speed (m/s)": "wind_speed_ms",
-        }
+        variables = {"Precipitation (mm)":"precipitation_mm", "Temperature (°C)":"temperature_c", "Humidity (%)":"humidity_pct", "Cloud cover (%)":"cloud_cover_pct", "Wind speed (m/s)":"wind_speed_ms"}
         c1, c2 = st.columns(2)
         with c1:
             variable_label = st.selectbox("Forecast variable", list(variables.keys()), key="bmkg_spatial_variable")
         with c2:
             timestamps = sorted(spatial_df["forecast_datetime"].dropna().unique()) if "forecast_datetime" in spatial_df.columns else []
-            selected_ts = st.selectbox(
-                "Forecast time", timestamps,
-                format_func=lambda x: pd.Timestamp(x).strftime("%d %b %Y · %H:%M"),
-                key="bmkg_spatial_time",
-            ) if timestamps else None
+            selected_ts = st.selectbox("Forecast time", timestamps, format_func=lambda x: pd.Timestamp(x).strftime("%d %b %Y · %H:%M"), key="bmkg_spatial_time") if timestamps else None
         spatial_view = spatial_df[spatial_df["forecast_datetime"] == selected_ts].copy() if selected_ts is not None else spatial_df.copy()
         value_col = variables[variable_label]
         if value_col in spatial_view.columns:
             spatial_view[value_col] = pd.to_numeric(spatial_view[value_col], errors="coerce")
             spatial_view = spatial_view.dropna(subset=["longitude", "latitude", value_col])
-        else:
-            spatial_view = pd.DataFrame()
-
         if spatial_view.empty:
             st.info("No valid BMKG spatial forecast cells for the selected variable/time.")
         else:
             m1, m2, m3, m4 = st.columns(4)
-            with m1:
-                st.metric("Forecast cells", f"{len(spatial_view):,}")
-            with m2:
-                st.metric("Minimum", f"{spatial_view[value_col].min():.2f}")
-            with m3:
-                st.metric("Mean", f"{spatial_view[value_col].mean():.2f}")
-            with m4:
-                st.metric("Maximum", f"{spatial_view[value_col].max():.2f}")
-
-            fig_spatial = px.scatter_mapbox(
-                spatial_view,
-                lat="latitude", lon="longitude", color=value_col,
-                color_continuous_scale="Viridis",
-                hover_data={"latitude":":.5f","longitude":":.5f",value_col:":.2f","forecast_datetime":True},
-                zoom=9, height=520, labels={value_col: variable_label},
-            )
-            fig_spatial.update_traces(marker={"size":8,"opacity":0.72})
-            fig_spatial.update_layout(
-                mapbox_style="open-street-map",
-                margin={"l":0,"r":0,"t":10,"b":0},
-                coloraxis_colorbar={"title":variable_label},
-            )
-            st.plotly_chart(fig_spatial, use_container_width=True, config={"displayModeBar":False})
-            st.caption(f"Source: BMKG ADM4 forecast points + IDW · Boundary: {scope.replace('_',' ').title()} · Spatially interpolated forecast surface.")
+            m1.metric("Forecast cells", f"{len(spatial_view):,}")
+            m2.metric("Minimum", f"{spatial_view[value_col].min():.2f}")
+            m3.metric("Mean", f"{spatial_view[value_col].mean():.2f}")
+            m4.metric("Maximum", f"{spatial_view[value_col].max():.2f}")
+            fig = px.scatter_mapbox(spatial_view, lat="latitude", lon="longitude", color=value_col, color_continuous_scale="Viridis", hover_data={"latitude":":.5f", "longitude":":.5f", value_col:":.2f", "forecast_datetime":True}, zoom=9, height=520, labels={value_col:variable_label})
+            fig.update_traces(marker={"size":8,"opacity":0.72})
+            fig.update_layout(mapbox_style="open-street-map", margin={"l":0,"r":0,"t":10,"b":0}, coloraxis_colorbar={"title":variable_label})
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
+            st.caption(f"Source: BMKG ADM4 forecast points + IDW · Boundary: {scope.replace('_',' ').title()} · 1 km grid.")
+            spatial_download_cols = [c for c in ["latitude","longitude","forecast_datetime","precipitation_mm","temperature_c","humidity_pct","cloud_cover_pct","wind_speed_ms"] if c in spatial_view.columns]
+            spatial_download = spatial_view[spatial_download_cols].sort_values(["latitude","longitude"]).copy()
+            add_downloads(spatial_download, f"SERPRO_BMKG_IDW_{scope}_{pd.Timestamp(selected_ts).strftime('%Y%m%d_%H%M') if selected_ts is not None else 'latest'}", "IDW Surface", "bmkg_spatial")
             with st.expander("Spatial forecast data"):
-                columns = [c for c in ["latitude","longitude",value_col,"forecast_datetime","precipitation_mm","temperature_c","humidity_pct","cloud_cover_pct","wind_speed_ms"] if c in spatial_view.columns]
-                st.dataframe(spatial_view[columns].sort_values(["latitude","longitude"]), use_container_width=True, hide_index=True)
+                st.dataframe(spatial_download, use_container_width=True, hide_index=True)
+            geojson_bytes = spatial_path.read_bytes()
+            st.download_button("🗺️ Download GeoJSON", geojson_bytes, file_name=spatial_path.name, mime="application/geo+json", key="bmkg_geojson")
 
+# -----------------------------------------------------------------------------
+# 3. HISTORICAL CLIMATE
+# -----------------------------------------------------------------------------
+st.markdown('<div class="section">📊 Historical Climate</div>', unsafe_allow_html=True)
+st.markdown('<div class="note">Historical rainfall, anomaly, drought/wetness indicators and climate risk. BMKG forecast is deliberately excluded from these calculations.</div>', unsafe_allow_html=True)
+if scoped.empty:
+    st.warning("Tidak ada data pada periode yang dipilih.")
+    st.stop()
 latest_row = scoped.iloc[-1]
 latest_date = latest_row["date"]
 latest_value = float(latest_row["rainfall_mm"])
 selected_30d = float(scoped.tail(30)["rainfall_mm"].sum())
-source = str(latest_row.get("source","—"))
-processed_at = str(latest_row.get("processing_time_utc","—"))
+source = str(latest_row.get("source", "—"))
+processed_at = str(latest_row.get("processing_time_utc", "—"))
 source_label = {"NASA/GPM_L3/IMERG_V07":"NASA GPM IMERG V07"}.get(source, source)
 
-# -------------------------------------------------------------------------
-# 3. Historical rainfall snapshot / climate KPIs
-# -------------------------------------------------------------------------
-st.markdown('<div class="section-title">Climate snapshot</div>', unsafe_allow_html=True)
 k1,k2,k3,k4 = st.columns(4)
-def kpi_html(label,value,note,variant):
-    return f'<div class="kpi {variant}"><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div><div class="kpi-note">{note}</div></div>'
-with k1:
-    st.markdown(kpi_html("Latest rainfall",f"{latest_value:.2f} mm",f"Observation · {latest_date.date()}","kpi-green"),unsafe_allow_html=True)
-with k2:
-    st.markdown(kpi_html("Rainfall · 30 days",f"{selected_30d:.1f} mm","Accumulated selected period","kpi-deep"),unsafe_allow_html=True)
-with k3:
-    anom_latest=None
-    if not anomaly.empty:
-        anomaly["date"]=pd.to_datetime(anomaly["date"],errors="coerce")
-        an=anomaly[(anomaly["scope"]==scope)&(anomaly["date"]<=pd.Timestamp(end_date))].sort_values("date")
-        if not an.empty and pd.notna(an.iloc[-1].get("anomaly_30d_pct")): anom_latest=float(an.iloc[-1]["anomaly_30d_pct"])
-    st.markdown(kpi_html("30-day anomaly",f"{anom_latest:+.1f}%" if anom_latest is not None else "—","vs CHIRPS 1991–2020 normal","kpi-coral"),unsafe_allow_html=True)
-with k4:
-    risk_level="—"
-    selected_risk=pd.DataFrame()
-    if not risk.empty:
-        risk["date"]=pd.to_datetime(risk["date"],errors="coerce")
-        selected_risk=risk[(risk["scope"]==scope)&(risk["date"]<=pd.Timestamp(end_date))].sort_values("date")
-        if not selected_risk.empty: risk_level=str(selected_risk.iloc[-1].get("risk_level","—")).replace("_"," ").title()
-    risk_dot={"Low":"🟢","Moderate":"🟡","High":"🟠","Very High":"🔴"}.get(risk_level,"⚪")
-    st.markdown(kpi_html("Climate risk",f"{risk_dot} {risk_level}","Latest available assessment","kpi-yellow"),unsafe_allow_html=True)
-
-# -------------------------------------------------------------------------
-# 4. Climate condition
-# -------------------------------------------------------------------------
-st.markdown('<div class="section-title">Climate condition</div>',unsafe_allow_html=True)
-cc1,cc2,cc3=st.columns(3)
-selected_anom=pd.DataFrame()
+k1.metric("Latest rainfall", f"{latest_value:.2f} mm", f"{latest_date.date()}")
+k2.metric("Rainfall · 30 days", f"{selected_30d:.1f} mm")
+anom_latest = None
+selected_anom = pd.DataFrame()
 if not anomaly.empty:
-    selected_anom=anomaly[(anomaly["scope"]==scope)&(anomaly["date"]>=pd.Timestamp(start_date))&(anomaly["date"]<=pd.Timestamp(end_date))].sort_values("date")
-with cc1:
-    if selected_anom.empty: status,icon,desc="Insufficient data","⚪","No anomaly observation available for this period."
-    else:
-        a=selected_anom.iloc[-1]; status=str(a.get("climate_status","Insufficient Data")).replace("_"," ").title()
-        icon={"Very Wet":"🟣","Wet":"🔵","Normal":"🟢","Dry":"🟡","Drought":"🔴","Insufficient Data":"⚪"}.get(status,"⚪")
-        desc="Latest 30-day rainfall condition against the historical baseline."
-    st.markdown(f'<div class="status-card status-drought"><div class="status-label">Rainfall condition</div><div class="status-value">{icon} {status}</div><div class="status-desc">{desc}</div></div>',unsafe_allow_html=True)
-with cc2:
-    if selected_risk.empty: rlevel,ricon,rdesc="No assessment","⚪","Climate risk output is not available for this period."
-    else:
-        rr=selected_risk.iloc[-1]; rlevel=str(rr.get("risk_level","—")).replace("_"," ").title(); ricon={"Low":"🟢","Moderate":"🟡","High":"🟠","Very High":"🔴"}.get(rlevel,"⚪"); rdesc=f"Assessment date: {rr['date'].date()}."
-    st.markdown(f'<div class="status-card status-risk"><div class="status-label">Climate risk</div><div class="status-value">{ricon} {rlevel}</div><div class="status-desc">{rdesc}</div></div>',unsafe_allow_html=True)
-with cc3:
-    obs_text="—"
-    if not selected_anom.empty:
-        obs=selected_anom.iloc[-1].get("obs_count_30d"); obs_text=f"{int(obs)}/30 days" if pd.notna(obs) else "—"
-    st.markdown(f'<div class="status-card status-observation"><div class="status-label">30-day observations</div><div class="status-value">{obs_text}</div><div class="status-desc">Observation availability in the latest anomaly calculation.</div></div>',unsafe_allow_html=True)
+    anomaly["date"] = pd.to_datetime(anomaly["date"], errors="coerce")
+    selected_anom = anomaly[(anomaly["scope"] == scope) & (anomaly["date"] >= pd.Timestamp(start_date)) & (anomaly["date"] <= pd.Timestamp(end_date))].sort_values("date")
+    if not selected_anom.empty and pd.notna(selected_anom.iloc[-1].get("anomaly_30d_pct")):
+        anom_latest = float(selected_anom.iloc[-1]["anomaly_30d_pct"])
+k3.metric("30-day anomaly", f"{anom_latest:+.1f}%" if anom_latest is not None else "—")
+risk_level = "—"
+selected_risk = pd.DataFrame()
+if not risk.empty:
+    risk["date"] = pd.to_datetime(risk["date"], errors="coerce")
+    selected_risk = risk[(risk["scope"] == scope) & (risk["date"] <= pd.Timestamp(end_date))].sort_values("date")
+    if not selected_risk.empty:
+        risk_level = str(selected_risk.iloc[-1].get("risk_level", "—")).replace("_", " ").title()
+k4.metric("Climate risk", risk_level)
 
-# -------------------------------------------------------------------------
-# 5. Rainfall trend and anomaly
-# -------------------------------------------------------------------------
-st.markdown('<div class="section-title">📈 Rainfall trend</div>',unsafe_allow_html=True)
-st.markdown('<div class="section-note">Daily rainfall for the selected monitoring area and period.</div>',unsafe_allow_html=True)
-fig=px.line(scoped,x="date",y="rainfall_mm",markers=True,labels={"date":"Date","rainfall_mm":"Rainfall (mm/day)"})
-fig.update_traces(line=dict(color="#156064",width=3),marker=dict(color="#00C49A",size=6))
-fig.update_layout(height=360,margin=dict(l=10,r=10,t=20,b=10),paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#16383A"),hovermode="x unified")
-fig.update_xaxes(showgrid=False); fig.update_yaxes(gridcolor="#E7EFEE",rangemode="tozero")
-st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False})
+st.markdown('<div class="section">📈 Rainfall trend</div>', unsafe_allow_html=True)
+fig = px.line(scoped, x="date", y="rainfall_mm", markers=True, labels={"date":"Date","rainfall_mm":"Rainfall (mm/day)"})
+fig.update_layout(height=360, margin=dict(l=10,r=10,t=20,b=10), hovermode="x unified")
+st.plotly_chart(fig, use_container_width=True, config={"displayModeBar":False})
+add_downloads(scoped, f"SERPRO_Historical_Rainfall_{scope}_{start_date}_{end_date}", "Rainfall", "hist_rainfall")
 
 if not selected_anom.empty:
-    st.markdown('<div class="section-title">📊 Rainfall anomaly</div>',unsafe_allow_html=True)
-    st.markdown('<div class="section-note">30-day accumulated rainfall compared with the CHIRPS 1991–2020 climatological normal.</div>',unsafe_allow_html=True)
-    fig2=px.line(selected_anom,x="date",y="anomaly_30d_pct",markers=True,labels={"date":"Date","anomaly_30d_pct":"30-day anomaly (%)"})
-    fig2.update_traces(line=dict(color="#FB8F67",width=3),marker=dict(color="#FB8F67",size=6)); fig2.add_hline(y=0,line_dash="dash",line_color="#8CA3A4")
-    fig2.update_layout(height=310,margin=dict(l=10,r=10,t=20,b=10),paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#16383A"),hovermode="x unified")
-    fig2.update_xaxes(showgrid=False); fig2.update_yaxes(gridcolor="#E7EFEE")
-    st.plotly_chart(fig2,use_container_width=True,config={"displayModeBar":False})
+    st.markdown('<div class="section">📊 Rainfall anomaly</div>', unsafe_allow_html=True)
+    fig2 = px.line(selected_anom, x="date", y="anomaly_30d_pct", markers=True, labels={"date":"Date","anomaly_30d_pct":"30-day anomaly (%)"})
+    fig2.add_hline(y=0, line_dash="dash")
+    fig2.update_layout(height=310, margin=dict(l=10,r=10,t=20,b=10), hovermode="x unified")
+    st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar":False})
+    add_downloads(selected_anom, f"SERPRO_Rainfall_Anomaly_{scope}_{start_date}_{end_date}", "Anomaly", "anomaly")
 
-# -------------------------------------------------------------------------
-# 6. SPI
-# -------------------------------------------------------------------------
-st.markdown('<div class="section-title">💧 Drought / wetness indicators</div>',unsafe_allow_html=True)
+st.markdown('<div class="section">💧 Drought / wetness indicators</div>', unsafe_allow_html=True)
 if spi.empty:
     st.info("SPI-3/SPI-6 belum tersedia untuk periode ini.")
 else:
-    spi["date"]=pd.to_datetime(spi["date"],errors="coerce")
-    current_spi=spi[(spi["scope"]==scope)&(spi["date"]<=pd.Timestamp(end_date))].sort_values("date")
+    spi["date"] = pd.to_datetime(spi["date"], errors="coerce")
+    current_spi = spi[(spi["scope"] == scope) & (spi["date"] <= pd.Timestamp(end_date))].sort_values("date")
     if current_spi.empty:
         st.info("SPI-3/SPI-6 belum tersedia untuk periode ini.")
     else:
-        latest_spi_date=current_spi["date"].max(); latest_spi=current_spi[current_spi["date"]==latest_spi_date]
-        s3=latest_spi[latest_spi["period"]=="SPI-3"]; s6=latest_spi[latest_spi["period"]=="SPI-6"]
-        sp1,sp2,sp3,sp4=st.columns(4); vals=[]
-        if not s3.empty and pd.notna(s3.iloc[0].get("spi")): vals.extend([f"{float(s3.iloc[0]['spi']):+.2f}",str(s3.iloc[0]["spi_status"]).replace("_"," ").title()])
-        else: vals.extend(["—","Insufficient data"])
-        if not s6.empty and pd.notna(s6.iloc[0].get("spi")): vals.extend([f"{float(s6.iloc[0]['spi']):+.2f}",str(s6.iloc[0]["spi_status"]).replace("_"," ").title()])
-        else: vals.extend(["—","Insufficient data"])
-        with sp1: st.markdown(f'<div class="spi-card spi-blue"><div class="spi-label">SPI-3</div><div class="spi-value">{vals[0]}</div></div>',unsafe_allow_html=True)
-        with sp2: st.markdown(f'<div class="spi-card spi-yellow"><div class="spi-label">SPI-3 status</div><div class="spi-value">{vals[1]}</div></div>',unsafe_allow_html=True)
-        with sp3: st.markdown(f'<div class="spi-card spi-blue"><div class="spi-label">SPI-6</div><div class="spi-value">{vals[2]}</div></div>',unsafe_allow_html=True)
-        with sp4: st.markdown(f'<div class="spi-card spi-yellow"><div class="spi-label">SPI-6 status</div><div class="spi-value">{vals[3]}</div></div>',unsafe_allow_html=True)
-        st.caption(f"Latest SPI calculation: {latest_spi_date.date()} · Values below zero indicate drier-than-normal conditions; values above zero indicate wetter-than-normal conditions.")
+        latest_spi_date = current_spi["date"].max()
+        latest_spi = current_spi[current_spi["date"] == latest_spi_date]
+        s3 = latest_spi[latest_spi["period"] == "SPI-3"]
+        s6 = latest_spi[latest_spi["period"] == "SPI-6"]
+        sp1,sp2,sp3,sp4 = st.columns(4)
+        sp1.metric("SPI-3", f"{float(s3.iloc[0]['spi']):+.2f}" if not s3.empty and pd.notna(s3.iloc[0].get("spi")) else "—")
+        sp2.metric("SPI-3 status", str(s3.iloc[0].get("spi_status","Insufficient data")).replace("_"," ").title() if not s3.empty else "Insufficient data")
+        sp3.metric("SPI-6", f"{float(s6.iloc[0]['spi']):+.2f}" if not s6.empty and pd.notna(s6.iloc[0].get("spi")) else "—")
+        sp4.metric("SPI-6 status", str(s6.iloc[0].get("spi_status","Insufficient data")).replace("_"," ").title() if not s6.empty else "Insufficient data")
+        st.caption(f"Latest SPI calculation: {latest_spi_date.date()} · Below zero = drier-than-normal; above zero = wetter-than-normal.")
+        add_downloads(current_spi, f"SERPRO_SPI_{scope}_{latest_spi_date.strftime('%Y%m%d')}", "SPI", "spi")
 
-# -------------------------------------------------------------------------
-# 7. Data quality and source
-# -------------------------------------------------------------------------
-st.markdown('<div class="section-title">ℹ️ Data & quality</div>',unsafe_allow_html=True)
+if not selected_risk.empty:
+    st.markdown('<div class="section">⚠️ Climate Risk Assessment</div>', unsafe_allow_html=True)
+    st.dataframe(selected_risk, use_container_width=True, hide_index=True)
+    add_downloads(selected_risk, f"SERPRO_Climate_Risk_{scope}_{start_date}_{end_date}", "Climate Risk", "risk")
+
+st.markdown('<div class="section">ℹ️ Data Quality & Information</div>', unsafe_allow_html=True)
 st.markdown(f"""
-<div class="info-strip">
-  <b>Rainfall source:</b> {source_label} · <b>Monitoring area:</b> {scope.replace('_',' ').title()} ·
-  <b>Selected period:</b> {start_date} → {end_date} · <b>Observations:</b> {len(scoped)} ·
-  <b>Latest processing:</b> {processed_at}.
+<div class="info">
+<b>Historical rainfall source:</b> {source_label} · <b>Monitoring area:</b> {scope.replace('_',' ').title()} · <b>Selected period:</b> {start_date} → {end_date} · <b>Observations:</b> {len(scoped)} · <b>Latest processing:</b> {processed_at}.<br><br>
+<b>BMKG:</b> five ADM4 pilot-village forecasts, refreshed routinely, spatially interpolated with IDW and clipped to Project Area / Carbon Project Zone. BMKG forecast is operational information only and is <b>not included</b> in historical rainfall, anomaly, SPI or Climate Risk calculations.
 </div>
-<div class="legend-row">
-  <div class="legend-item"><span class="dot" style="background:#00C49A"></span> Normal / favourable</div>
-  <div class="legend-item"><span class="dot" style="background:#F8E16C"></span> Dry / moderate concern</div>
-  <div class="legend-item"><span class="dot" style="background:#FB8F67"></span> High concern</div>
-  <div class="legend-item"><span class="dot" style="background:#156064"></span> Monitoring baseline</div>
-</div>
-""",unsafe_allow_html=True)
-st.caption("Climate indicators are monitoring and screening products. Risk classifications should be interpreted together with rainfall history, SPI indicators, BMKG operational forecast and field information.")
+""", unsafe_allow_html=True)
+
+with st.expander("Download standard & reproducibility"):
+    st.markdown("**Spatial downloads include latitude and longitude whenever the dataset has point/grid geometry.** BMKG ADM4 and IDW outputs can therefore be recreated in QGIS, ArcGIS, Google Earth Engine, Python or R. Spatial forecast is also available as GeoJSON for direct GIS use.")
+    st.markdown("**Recommended formats:** Excel for analysis/reporting, CSV for interoperability, GeoJSON for spatial GIS workflows.")
+
+st.caption("SERPRO Climate Monitoring · Historical evidence and operational forecast are intentionally separated for transparent interpretation and auditability.")
