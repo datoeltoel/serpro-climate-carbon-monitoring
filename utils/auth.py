@@ -16,24 +16,30 @@ ROLES = {
     "mrv_specialist": "MRV Specialist",
 }
 
-# Management is intentionally full-access: it can see every operational
-# module currently exposed by the application navigation.
-ALL_PAGE_KEYS = {
+# Operational monitoring is intentionally viewer-oriented. Guest is a field
+# operational viewer for climate, vegetation, fire and climate-risk pages.
+ALL_OPERATIONAL_PAGE_KEYS = {
     "climate_monitoring",
     "vegetation_monitoring",
     "fire_monitoring",
     "climate_risk",
 }
 
-# Guest is a field-operational viewer. It can read the climate, vegetation,
-# fire, and climate-risk monitoring pages, but receives no write/admin
-# privileges because those are not represented by these page permissions.
+# Enterprise pages have a separate permission boundary. In particular,
+# MRV Carbon Tracker is not exposed to the Guest field-viewer role.
+ENTERPRISE_PAGE_KEYS = {
+    "executive_summary",
+    "mrv_carbon_tracker",
+    "climate_monitoring",
+    "spatial_data_catalog",
+}
+
 ROLE_PERMISSIONS = {
-    "guest": set(ALL_PAGE_KEYS),
-    "management": set(ALL_PAGE_KEYS),
-    "gis_specialist": set(ALL_PAGE_KEYS),
-    "forestry_planner": set(ALL_PAGE_KEYS),
-    "mrv_specialist": set(ALL_PAGE_KEYS),
+    "guest": set(ALL_OPERATIONAL_PAGE_KEYS) | {"executive_summary", "climate_monitoring"},
+    "management": set(ALL_OPERATIONAL_PAGE_KEYS) | set(ENTERPRISE_PAGE_KEYS),
+    "gis_specialist": set(ALL_OPERATIONAL_PAGE_KEYS) | {"executive_summary", "climate_monitoring", "spatial_data_catalog"},
+    "forestry_planner": set(ALL_OPERATIONAL_PAGE_KEYS) | {"executive_summary", "climate_monitoring", "mrv_carbon_tracker"},
+    "mrv_specialist": set(ALL_OPERATIONAL_PAGE_KEYS) | set(ENTERPRISE_PAGE_KEYS),
 }
 
 # Backward-compatible aliases for the shorter usernames previously used in
@@ -122,9 +128,6 @@ def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
     config = st.session_state.get("serpro_auth_config") or _secrets_config()
     usernames = config["credentials"]["usernames"]
 
-    # Restore an existing authenticator cookie without rendering a second
-    # login widget. Older deployments can throw here when the cookie/session
-    # schema changed, so a stale cookie must not crash the application.
     try:
         authenticator.login(location="unrendered")
     except Exception:
@@ -145,11 +148,6 @@ def require_authentication() -> tuple[stauth.Authenticate, str, str, list[str]]:
 
     username = str(st.session_state.get("username", ""))
     name = str(st.session_state.get("name", username))
-
-    # Do not access authenticator.credentials directly. The public
-    # streamlit-authenticator object does not expose that attribute reliably
-    # across supported versions; the validated Secrets configuration is the
-    # application source of truth for RBAC metadata.
     user = dict(usernames.get(username, {}))
     roles = user.get("roles", st.session_state.get("roles", []))
     if isinstance(roles, str):
