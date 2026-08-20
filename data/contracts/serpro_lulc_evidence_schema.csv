@@ -1,0 +1,2 @@
+year,class_code,class_name,area_ha,source,acquisition_date,spatial_resolution_m,classification_method,accuracy_percent,processing_version
+2025,EXAMPLE,Replace_with_verified_class,0,verified_source,YYYY-MM-DD,10,methodology_and_algorithm,0.0,v1
