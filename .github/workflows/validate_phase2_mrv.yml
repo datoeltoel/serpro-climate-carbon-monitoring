@@ -21,6 +21,9 @@ jobs:
       - name: Install runtime dependencies
         run: pip install -r requirements.txt
 
+      - name: Install CI test dependencies
+        run: pip install 'pytest>=8,<9'
+
       - name: Compile Phase 2 Python files
         run: python -m compileall -q app.py pages utils tests
 
