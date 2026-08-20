@@ -22,37 +22,29 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Compile Phase 2 Python files
-        run: python -m compileall -q app.py pages utils
+        run: python -m compileall -q app.py pages utils tests
 
       - name: Validate MRV calculation primitives
         run: |
           python - <<'PY'
-          from utils.mrv_engine import (
-              area_coverage,
-              biomass_to_carbon_tonnes,
-              carbon_to_co2e_tonnes,
-              relative_uncertainty_percent,
-          )
-
+          from utils.mrv_engine import area_coverage, biomass_to_carbon_tonnes, carbon_to_co2e_tonnes, relative_uncertainty_percent
           coverage = area_coverage(900.0, 1000.0)
           assert round(coverage.coverage_percent, 2) == 90.0
           assert round(coverage.delta_ha, 2) == -100.0
-
           carbon = biomass_to_carbon_tonnes(100.0, 0.47)
           assert round(carbon, 2) == 47.0
           assert round(carbon_to_co2e_tonnes(carbon), 6) == round(47.0 * 44.0 / 12.0, 6)
-
-          uncertainty = relative_uncertainty_percent([100.0, 50.0], [10.0, 20.0])
-          assert uncertainty > 0
-
+          assert relative_uncertainty_percent([100.0, 50.0], [10.0, 20.0]) > 0
           print('PHASE 2 MRV PASS')
           PY
+
+      - name: Validate Phase 2.1 LULC evidence
+        run: python -m pytest -q tests/test_mrv_evidence.py
 
       - name: Validate RBAC boundary
         run: |
           python - <<'PY'
           from utils.auth import ROLE_PERMISSIONS
-
           assert 'mrv_carbon_tracker' not in ROLE_PERMISSIONS['guest']
           assert 'spatial_data_catalog' not in ROLE_PERMISSIONS['guest']
           assert 'fire_monitoring' in ROLE_PERMISSIONS['guest']
