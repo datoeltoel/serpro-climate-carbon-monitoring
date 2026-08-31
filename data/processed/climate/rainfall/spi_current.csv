@@ -1,9 +1,5 @@
 date,scope,period,rainfall_accum_mm,spi,spi_status,source
-2026-07-01,carbon_project_zone,SPI-3,,,insufficient_data,NASA GPM IMERG V07 + CHIRPS historical distribution
 2026-08-01,carbon_project_zone,SPI-3,,,insufficient_data,NASA GPM IMERG V07 + CHIRPS historical distribution
-2026-07-01,project_area,SPI-3,,,insufficient_data,NASA GPM IMERG V07 + CHIRPS historical distribution
 2026-08-01,project_area,SPI-3,,,insufficient_data,NASA GPM IMERG V07 + CHIRPS historical distribution
-2026-07-01,carbon_project_zone,SPI-6,,,insufficient_data,NASA GPM IMERG V07 + CHIRPS historical distribution
 2026-08-01,carbon_project_zone,SPI-6,,,insufficient_data,NASA GPM IMERG V07 + CHIRPS historical distribution
-2026-07-01,project_area,SPI-6,,,insufficient_data,NASA GPM IMERG V07 + CHIRPS historical distribution
 2026-08-01,project_area,SPI-6,,,insufficient_data,NASA GPM IMERG V07 + CHIRPS historical distribution
