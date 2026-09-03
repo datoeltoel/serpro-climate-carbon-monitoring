@@ -10,7 +10,7 @@
     "Halimaung Jaya",
     "Sungai Bakau"
   ],
-  "forecast_timestamp_used_for_idw": "2026-09-05T22:00:00",
+  "forecast_timestamp_used_for_idw": "2026-09-05T23:00:00",
   "idw_power": 2.0,
   "idw_resolution_m": 1000,
   "boundaries": {
@@ -18,41 +18,41 @@
     "project_area": "SERPRO Project Area"
   },
   "interpretation": "Forecast conditions from five BMKG ADM4 pilot villages are spatially interpolated with IDW and clipped separately to the SERPRO Project Area and Carbon Project Zone. These are forecast surfaces, not direct station observations, and are excluded from historical Climate Risk calculations.",
-  "fetched_at_utc": "2026-09-02T23:02:31.618651+00:00",
+  "fetched_at_utc": "2026-09-03T03:19:23.171734+00:00",
   "quality": [
     {
       "location": "Pematang Limau",
       "adm4": "62.07.01.2005",
       "status": "OK",
-      "records": 22,
+      "records": 21,
       "error": ""
     },
     {
       "location": "Tanjung Rangas",
       "adm4": "62.07.01.2007",
       "status": "OK",
-      "records": 22,
+      "records": 21,
       "error": ""
     },
     {
       "location": "Mekar Indah",
       "adm4": "62.07.06.2001",
       "status": "OK",
-      "records": 22,
+      "records": 21,
       "error": ""
     },
     {
       "location": "Halimaung Jaya",
       "adm4": "62.07.06.2002",
       "status": "OK",
-      "records": 22,
+      "records": 21,
       "error": ""
     },
     {
       "location": "Sungai Bakau",
       "adm4": "62.07.06.2006",
       "status": "OK",
-      "records": 22,
+      "records": 21,
       "error": ""
     }
   ],
