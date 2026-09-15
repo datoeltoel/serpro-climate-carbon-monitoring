@@ -1,3 +1,3 @@
 date,scope,rainfall_anomaly_30d_pct,spi_3,spi_6,ndmi_latest,ndmi_change_30d_pct,hotspots_7d,hotspot_density_7d_per_10kha,rainfall_score,drought_score,vegetation_score,fire_score,integrated_risk_score,risk_level,risk_basis,assessment
-2026-09-14,carbon_project_zone,-99.8738,,,0.2218,13.7015,1482,98.7062,4.0000,0.0000,0.0000,4.0000,8.0000,high,operational,"Integrated climate screening from rainfall, SPI, NDMI trend, and active-fire density."
-2026-09-14,project_area,-99.8701,,,0.2198,-27.9103,340,107.3050,4.0000,0.0000,3.0000,4.0000,11.0000,very_high,operational,"Integrated climate screening from rainfall, SPI, NDMI trend, and active-fire density."
+2026-09-14,carbon_project_zone,-99.8738,,,0.1551,-20.5152,1482,98.7062,4.0000,0.0000,3.0000,4.0000,11.0000,very_high,operational,"Integrated climate screening from rainfall, SPI, NDMI trend, and active-fire density."
+2026-09-14,project_area,-99.8701,,,0.1979,-28.6025,340,107.3050,4.0000,0.0000,3.0000,4.0000,11.0000,very_high,operational,"Integrated climate screening from rainfall, SPI, NDMI trend, and active-fire density."
