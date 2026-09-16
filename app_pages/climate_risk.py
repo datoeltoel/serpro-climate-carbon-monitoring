@@ -6,8 +6,6 @@ from utils.ui import setup_page
 
 setup_page()
 
-st.set_page_config(page_title="SERPRO Climate Risk", page_icon="⚠️", layout="wide")
-
 st.markdown(
     """
     <style>
