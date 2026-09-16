@@ -140,7 +140,8 @@ else:
 
 st.markdown("### 🗺️ SERPRO Fire Monitoring Map")
 st.caption("Live/near-real-time VIIRS hotspot map for the selected monitoring period and selected source(s). Purple = Carbon Project Zone; green = Project Area; gray/yellow/red = Low/Moderate/High confidence.")
-m = folium.Map(location=[-3.10, 112.62], zoom_start=9, tiles="CartoDB positron", control_scale=True)
+# Use OpenStreetMap directly so the public viewer does not depend on a CartoDB API key.
+m = folium.Map(location=[-3.10, 112.62], zoom_start=9, tiles="OpenStreetMap", control_scale=True)
 zone = load_carbon_project_zone()
 area = load_project_area()
 if zone.get("features"):
