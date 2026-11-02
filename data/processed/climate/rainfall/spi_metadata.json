@@ -16,6 +16,6 @@
     "severe_drought": "-2.0 to <= -1.5",
     "extreme_drought": "<= -2.0"
   },
-  "current_records": 8,
+  "current_records": 4,
   "historical_records": 2146
 }
